@@ -1,8 +1,7 @@
-// package.json
 {
-  "name": "ghl-custom-values-manager",
+  "name": "custom-values-manager",
   "version": "1.0.0",
-  "description": "GoHighLevel marketplace app for managing custom values and fields across subaccounts",
+  "description": "Marketplace app for managing custom values and fields across subaccounts",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +9,6 @@
     "build": "echo 'No build step required for this app'"
   },
   "keywords": [
-    "gohighlevel",
     "custom-values",
     "custom-fields",
     "marketplace-app"
