@@ -33,7 +33,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 2rem;
         }
@@ -48,7 +48,7 @@
         }
 
         .header-content {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
             display: flex;
@@ -64,7 +64,7 @@
             -webkit-text-fill-color: transparent;
         }
 
-        .auth-status {
+        .location-info {
             display: flex;
             align-items: center;
             gap: 1rem;
@@ -132,64 +132,6 @@
         .btn-small {
             padding: 0.5rem 1rem;
             font-size: 0.875rem;
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 2rem;
-        }
-
-        .sidebar {
-            background: var(--surface);
-            border-radius: 12px;
-            padding: 1.5rem;
-            height: fit-content;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .sidebar h2 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-            color: var(--text);
-        }
-
-        .location-list {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .location-item {
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            background: var(--surface-light);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-        }
-
-        .location-item:hover {
-            background: var(--background);
-            border-color: var(--primary);
-            transform: translateX(5px);
-        }
-
-        .location-item.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-color: var(--primary);
-        }
-
-        .location-name {
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-
-        .location-id {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            font-family: monospace;
         }
 
         .content-area {
@@ -523,42 +465,6 @@
             font-size: 1.5rem;
         }
 
-        .bulk-actions {
-            background: var(--surface-light);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-top: 2rem;
-        }
-
-        .bulk-actions h3 {
-            margin-bottom: 1rem;
-            color: var(--text);
-        }
-
-        .checkbox-group {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-        }
-
-        .checkbox-item {
-            display: flex;
-            align-items: center;
-            padding: 0.5rem;
-            margin-bottom: 0.25rem;
-            background: var(--background);
-            border-radius: 4px;
-        }
-
-        .checkbox-item:hover {
-            background: var(--surface);
-        }
-
-        .checkbox-item input[type="checkbox"] {
-            margin-right: 0.75rem;
-        }
-
         .field-type-badge {
             display: inline-block;
             padding: 0.25rem 0.5rem;
@@ -599,91 +505,54 @@
     <header>
         <div class="header-content">
             <h1>Custom Values Manager</h1>
-            <div class="auth-status">
-                <div class="status-indicator" id="statusIndicator"></div>
-                <span id="statusText">Connecting...</span>
+            <div class="location-info">
+                <div class="status-indicator"></div>
+                <span id="locationName">Loading...</span>
             </div>
         </div>
     </header>
 
     <div class="container" id="appContainer">
-        <!-- Main content - no auth section needed -->
-        <div class="main-content" id="mainContent">
-            <aside class="sidebar">
-                <h2>Subaccounts</h2>
-                <div class="location-list" id="locationList">
+        <main class="content-area">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('values')">Custom Values</button>
+                <button class="tab" onclick="switchTab('fields')">Custom Fields</button>
+            </div>
+
+            <div class="tab-content active" id="valuesTab">
+                <div class="actions-bar">
+                    <div class="search-box">
+                        <input type="text" placeholder="Search custom values..." id="valuesSearch" onkeyup="filterItems('values')">
+                    </div>
+                    <button class="btn btn-success" onclick="openModal('value')">
+                        <span>➕</span> Add Custom Value
+                    </button>
+                </div>
+                <div class="items-grid" id="valuesList">
                     <div class="empty-state">
                         <div class="loading"></div>
-                        <p>Loading locations...</p>
+                        <p>Loading custom values...</p>
                     </div>
                 </div>
-            </aside>
+            </div>
 
-            <main class="content-area">
-                <div class="tabs">
-                    <button class="tab active" onclick="switchTab('values')">Custom Values</button>
-                    <button class="tab" onclick="switchTab('fields')">Custom Fields</button>
-                    <button class="tab" onclick="switchTab('bulk')">Bulk Operations</button>
-                </div>
-
-                <div class="tab-content active" id="valuesTab">
-                    <div class="actions-bar">
-                        <div class="search-box">
-                            <input type="text" placeholder="Search custom values..." id="valuesSearch" onkeyup="filterItems('values')">
-                        </div>
-                        <button class="btn btn-success" onclick="openModal('value')">
-                            <span>➕</span> Add Custom Value
-                        </button>
+            <div class="tab-content" id="fieldsTab">
+                <div class="actions-bar">
+                    <div class="search-box">
+                        <input type="text" placeholder="Search custom fields..." id="fieldsSearch" onkeyup="filterItems('fields')">
                     </div>
-                    <div class="items-grid" id="valuesList">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📭</div>
-                            <p>Select a location to view custom values</p>
-                        </div>
+                    <button class="btn btn-success" onclick="openModal('field')">
+                        <span>➕</span> Add Custom Field
+                    </button>
+                </div>
+                <div class="items-grid" id="fieldsList">
+                    <div class="empty-state">
+                        <div class="loading"></div>
+                        <p>Loading custom fields...</p>
                     </div>
                 </div>
-
-                <div class="tab-content" id="fieldsTab">
-                    <div class="actions-bar">
-                        <div class="search-box">
-                            <input type="text" placeholder="Search custom fields..." id="fieldsSearch" onkeyup="filterItems('fields')">
-                        </div>
-                        <button class="btn btn-success" onclick="openModal('field')">
-                            <span>➕</span> Add Custom Field
-                        </button>
-                    </div>
-                    <div class="items-grid" id="fieldsList">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📭</div>
-                            <p>Select a location to view custom fields</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-content" id="bulkTab">
-                    <div class="bulk-actions">
-                        <h3>Copy Custom Values & Fields</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                            Select a source location above, then choose target locations to copy custom values and fields.
-                        </p>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Target Locations</label>
-                            <div class="checkbox-group" id="targetLocations"></div>
-                        </div>
-                        
-                        <div style="display: flex; gap: 1rem;">
-                            <button class="btn" onclick="bulkCopy('values')">
-                                <span>📋</span> Copy Custom Values
-                            </button>
-                            <button class="btn" onclick="bulkCopy('fields')">
-                                <span>📋</span> Copy Custom Fields
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
 
     <!-- Modal for creating/editing items -->
@@ -704,25 +573,24 @@
     </div>
 
     <script>
-        let currentCompanyId = null;
         let currentLocationId = null;
-        let locations = [];
+        let locationData = null;
         let currentItemType = 'value';
         let editingItemId = null;
 
         // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            currentCompanyId = urlParams.get('companyId');
+            currentLocationId = urlParams.get('locationId');
             
-            if (!currentCompanyId) {
-                // No companyId - show error
+            if (!currentLocationId) {
+                // No locationId - show error
                 showAuthError();
             } else {
-                // Company ID exists - load data
-                document.getElementById('statusIndicator').classList.add('connected');
-                document.getElementById('statusText').textContent = 'Connected';
-                loadLocations();
+                // Location ID exists - load data
+                loadLocationData();
+                loadCustomValues();
+                loadCustomFields();
             }
         });
 
@@ -736,69 +604,23 @@
             `;
         }
 
-        async function loadLocations() {
+        async function loadLocationData() {
             try {
-                const response = await fetch(`/api/locations?companyId=${currentCompanyId}`);
+                const response = await fetch(`/api/location/${currentLocationId}`);
                 if (!response.ok) {
                     if (response.status === 401) {
-                        // Token expired or invalid
                         showAuthError();
                         return;
                     }
-                    throw new Error('Failed to load locations');
+                    throw new Error('Failed to load location data');
                 }
                 
-                const data = await response.json();
-                locations = data.locations || [];
-                renderLocations();
+                locationData = await response.json();
+                document.getElementById('locationName').textContent = locationData.name || 'Location';
             } catch (error) {
-                console.error('Error loading locations:', error);
-                showToast('Failed to load locations. Please try reinstalling the app.', 'error');
+                console.error('Error loading location:', error);
+                document.getElementById('locationName').textContent = 'Unknown Location';
             }
-        }
-
-        function renderLocations() {
-            const locationList = document.getElementById('locationList');
-            if (locations.length === 0) {
-                locationList.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📍</div>
-                        <p>No locations found</p>
-                    </div>
-                `;
-                return;
-            }
-
-            locationList.innerHTML = locations.map(location => `
-                <div class="location-item" onclick="selectLocation('${location.id}')" data-location-id="${location.id}">
-                    <div class="location-name">${location.name}</div>
-                    <div class="location-id">${location.id}</div>
-                </div>
-            `).join('');
-
-            // Also populate bulk operations checkboxes
-            const targetLocations = document.getElementById('targetLocations');
-            targetLocations.innerHTML = locations.map(location => `
-                <div class="checkbox-item">
-                    <input type="checkbox" id="target-${location.id}" value="${location.id}">
-                    <label for="target-${location.id}">${location.name}</label>
-                </div>
-            `).join('');
-        }
-
-        async function selectLocation(locationId) {
-            currentLocationId = locationId;
-            
-            // Update UI
-            document.querySelectorAll('.location-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.locationId === locationId);
-            });
-
-            // Load custom values and fields
-            await Promise.all([
-                loadCustomValues(),
-                loadCustomFields()
-            ]);
         }
 
         async function loadCustomValues() {
@@ -806,7 +628,7 @@
             valuesList.innerHTML = '<div class="loading"></div>';
 
             try {
-                const response = await fetch(`/api/custom-values/${currentLocationId}?companyId=${currentCompanyId}`);
+                const response = await fetch(`/api/custom-values/${currentLocationId}`);
                 if (response.ok) {
                     const data = await response.json();
                     renderCustomValues(data.customValues || []);
@@ -824,7 +646,7 @@
             fieldsList.innerHTML = '<div class="loading"></div>';
 
             try {
-                const response = await fetch(`/api/custom-fields/${currentLocationId}?companyId=${currentCompanyId}`);
+                const response = await fetch(`/api/custom-fields/${currentLocationId}`);
                 if (response.ok) {
                     const data = await response.json();
                     renderCustomFields(data.customFields || []);
@@ -845,6 +667,7 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">📭</div>
                         <p>No custom values found</p>
+                        <p style="margin-top: 1rem;">Click "Add Custom Value" to create your first one!</p>
                     </div>
                 `;
                 return;
@@ -875,6 +698,7 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">📭</div>
                         <p>No custom fields found</p>
+                        <p style="margin-top: 1rem;">Click "Add Custom Field" to create your first one!</p>
                     </div>
                 `;
                 return;
@@ -928,11 +752,6 @@
         }
 
         function openModal(type) {
-            if (!currentLocationId) {
-                showToast('Please select a location first', 'error');
-                return;
-            }
-
             currentItemType = type;
             editingItemId = null;
             
@@ -1064,8 +883,8 @@
                 const endpoint = currentItemType === 'value' ? 'custom-values' : 'custom-fields';
                 const method = editingItemId ? 'PUT' : 'POST';
                 const url = editingItemId 
-                    ? `/api/${endpoint}/${currentLocationId}/${editingItemId}?companyId=${currentCompanyId}`
-                    : `/api/${endpoint}/${currentLocationId}?companyId=${currentCompanyId}`;
+                    ? `/api/${endpoint}/${currentLocationId}/${editingItemId}`
+                    : `/api/${endpoint}/${currentLocationId}`;
                 
                 const response = await fetch(url, {
                     method,
@@ -1099,7 +918,7 @@
             
             try {
                 const endpoint = type === 'value' ? 'custom-values' : 'custom-fields';
-                const response = await fetch(`/api/${endpoint}/${currentLocationId}/${id}?companyId=${currentCompanyId}`, {
+                const response = await fetch(`/api/${endpoint}/${currentLocationId}/${id}`, {
                     method: 'DELETE'
                 });
                 
@@ -1117,49 +936,6 @@
             } catch (error) {
                 console.error('Error deleting item:', error);
                 showToast('Failed to delete item', 'error');
-            }
-        }
-
-        async function bulkCopy(type) {
-            if (!currentLocationId) {
-                showToast('Please select a source location first', 'error');
-                return;
-            }
-            
-            const targetLocationIds = Array.from(document.querySelectorAll('#targetLocations input:checked'))
-                .map(checkbox => checkbox.value)
-                .filter(id => id !== currentLocationId);
-            
-            if (targetLocationIds.length === 0) {
-                showToast('Please select at least one target location', 'error');
-                return;
-            }
-            
-            if (!confirm(`Copy all custom ${type} from the selected location to ${targetLocationIds.length} location(s)?`)) {
-                return;
-            }
-            
-            try {
-                const endpoint = type === 'values' ? 'copy-custom-values' : 'copy-custom-fields';
-                const response = await fetch(`/api/bulk/${endpoint}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        companyId: currentCompanyId,
-                        sourceLocationId: currentLocationId,
-                        targetLocationIds
-                    })
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    showToast(`Custom ${type} copied successfully to ${targetLocationIds.length} location(s)`, 'success');
-                } else {
-                    throw new Error('Failed to copy items');
-                }
-            } catch (error) {
-                console.error('Error copying items:', error);
-                showToast('Failed to copy items', 'error');
             }
         }
 
