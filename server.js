@@ -43,10 +43,10 @@ async function refreshAccessToken(refreshToken) {
 }
 
 // Helper function to make authenticated API calls
-async function makeAuthenticatedRequest(url, method, companyId, data = null) {
-  const tokenData = tokenStore.get(companyId);
+async function makeAuthenticatedRequest(url, method, locationId, data = null) {
+  const tokenData = tokenStore.get(locationId);
   if (!tokenData) {
-    throw new Error('No token found for this company');
+    throw new Error('No token found for this location');
   }
 
   try {
@@ -71,7 +71,7 @@ async function makeAuthenticatedRequest(url, method, companyId, data = null) {
     if (error.response?.status === 401 && tokenData.refresh_token) {
       try {
         const newTokenData = await refreshAccessToken(tokenData.refresh_token);
-        tokenStore.set(companyId, newTokenData);
+        tokenStore.set(locationId, newTokenData);
         
         // Retry the request with new token
         const retryConfig = {
@@ -145,12 +145,16 @@ app.get('/authorize-handler', async (req, res) => {
 
     const tokenData = tokenResponse.data;
     
-    // Decode the token to get company/location info
+    // Decode the token to get location info
     const base64Payload = tokenData.access_token.split('.')[1];
     const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
     
-    // Store token data (in production, store in database with company association)
-    tokenStore.set(payload.companyId, tokenData);
+    // For sub-account apps, we get locationId directly
+    const locationId = payload.locationId;
+    const companyId = payload.companyId;
+    
+    // Store token data (in production, store in database with location association)
+    tokenStore.set(locationId, tokenData);
     
     // Show success page with access instructions
     res.send(`
@@ -202,12 +206,12 @@ app.get('/authorize-handler', async (req, res) => {
         <body>
           <div class="container">
             <h1>✅ Installation Successful!</h1>
-            <p>Custom Values Manager has been installed for your agency.</p>
+            <p>Custom Values Manager has been installed for this location.</p>
             <div class="url-display">
               Access your dashboard at:<br>
-              <strong>${req.protocol}://${req.get('host')}/dashboard?companyId=${payload.companyId}</strong>
+              <strong>${req.protocol}://${req.get('host')}/dashboard?locationId=${locationId}</strong>
             </div>
-            <a href="/dashboard?companyId=${payload.companyId}" class="button">Go to Dashboard</a>
+            <a href="/dashboard?locationId=${locationId}" class="button">Go to Dashboard</a>
           </div>
         </body>
       </html>
@@ -228,16 +232,15 @@ app.get('/authorize-handler', async (req, res) => {
 
 // API Routes for Custom Values
 
-// Get all custom values for a location
+// Get all custom values for this location
 app.get('/api/custom-values/:locationId', async (req, res) => {
   const { locationId } = req.params;
-  const { companyId } = req.query;
 
   try {
     const customValues = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues`,
       'GET',
-      companyId
+      locationId
     );
     res.json(customValues);
   } catch (error) {
@@ -251,14 +254,13 @@ app.get('/api/custom-values/:locationId', async (req, res) => {
 // Create a new custom value
 app.post('/api/custom-values/:locationId', async (req, res) => {
   const { locationId } = req.params;
-  const { companyId } = req.query;
   const customValueData = req.body;
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues`,
       'POST',
-      companyId,
+      locationId,
       customValueData
     );
     res.json(result);
@@ -273,14 +275,13 @@ app.post('/api/custom-values/:locationId', async (req, res) => {
 // Update a custom value
 app.put('/api/custom-values/:locationId/:customValueId', async (req, res) => {
   const { locationId, customValueId } = req.params;
-  const { companyId } = req.query;
   const updateData = req.body;
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues/${customValueId}`,
       'PUT',
-      companyId,
+      locationId,
       updateData
     );
     res.json(result);
@@ -295,13 +296,12 @@ app.put('/api/custom-values/:locationId/:customValueId', async (req, res) => {
 // Delete a custom value
 app.delete('/api/custom-values/:locationId/:customValueId', async (req, res) => {
   const { locationId, customValueId } = req.params;
-  const { companyId } = req.query;
 
   try {
     await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues/${customValueId}`,
       'DELETE',
-      companyId
+      locationId
     );
     res.json({ success: true });
   } catch (error) {
@@ -314,16 +314,15 @@ app.delete('/api/custom-values/:locationId/:customValueId', async (req, res) => 
 
 // API Routes for Custom Fields
 
-// Get all custom fields for a location
+// Get all custom fields for this location
 app.get('/api/custom-fields/:locationId', async (req, res) => {
   const { locationId } = req.params;
-  const { companyId } = req.query;
 
   try {
     const customFields = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields`,
       'GET',
-      companyId
+      locationId
     );
     res.json(customFields);
   } catch (error) {
@@ -337,14 +336,13 @@ app.get('/api/custom-fields/:locationId', async (req, res) => {
 // Create a new custom field
 app.post('/api/custom-fields/:locationId', async (req, res) => {
   const { locationId } = req.params;
-  const { companyId } = req.query;
   const customFieldData = req.body;
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields`,
       'POST',
-      companyId,
+      locationId,
       customFieldData
     );
     res.json(result);
@@ -359,14 +357,13 @@ app.post('/api/custom-fields/:locationId', async (req, res) => {
 // Update a custom field
 app.put('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
   const { locationId, customFieldId } = req.params;
-  const { companyId } = req.query;
   const updateData = req.body;
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields/${customFieldId}`,
       'PUT',
-      companyId,
+      locationId,
       updateData
     );
     res.json(result);
@@ -381,13 +378,12 @@ app.put('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
 // Delete a custom field
 app.delete('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
   const { locationId, customFieldId } = req.params;
-  const { companyId } = req.query;
 
   try {
     await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields/${customFieldId}`,
       'DELETE',
-      companyId
+      locationId
     );
     res.json({ success: true });
   } catch (error) {
@@ -398,141 +394,21 @@ app.delete('/api/custom-fields/:locationId/:customFieldId', async (req, res) => 
   }
 });
 
-// Get all subaccounts (locations) for an agency
-app.get('/api/locations', async (req, res) => {
-  const { companyId } = req.query;
+// Get location details
+app.get('/api/location/:locationId', async (req, res) => {
+  const { locationId } = req.params;
 
   try {
-    const locations = await makeAuthenticatedRequest(
-      `/companies/${companyId}/locations`,
+    const location = await makeAuthenticatedRequest(
+      `/locations/${locationId}`,
       'GET',
-      companyId
+      locationId
     );
-    res.json(locations);
+    res.json(location);
   } catch (error) {
-    console.error('Error fetching locations:', error);
+    console.error('Error fetching location:', error);
     res.status(error.response?.status || 500).json({ 
-      error: error.message || 'Failed to fetch locations' 
-    });
-  }
-});
-
-// Bulk operations for custom values
-
-// Copy custom values from one location to another
-app.post('/api/bulk/copy-custom-values', async (req, res) => {
-  const { companyId, sourceLocationId, targetLocationIds } = req.body;
-
-  try {
-    // Get custom values from source location
-    const sourceValues = await makeAuthenticatedRequest(
-      `/locations/${sourceLocationId}/customValues`,
-      'GET',
-      companyId
-    );
-
-    const results = [];
-    
-    // Copy to each target location
-    for (const targetLocationId of targetLocationIds) {
-      const locationResults = [];
-      
-      for (const customValue of sourceValues.customValues || []) {
-        try {
-          // Create new custom value in target location
-          const result = await makeAuthenticatedRequest(
-            `/locations/${targetLocationId}/customValues`,
-            'POST',
-            companyId,
-            {
-              name: customValue.name,
-              value: customValue.value
-            }
-          );
-          locationResults.push({ success: true, value: result });
-        } catch (error) {
-          locationResults.push({ 
-            success: false, 
-            error: error.message,
-            valueName: customValue.name 
-          });
-        }
-      }
-      
-      results.push({
-        locationId: targetLocationId,
-        results: locationResults
-      });
-    }
-    
-    res.json({ success: true, results });
-  } catch (error) {
-    console.error('Error in bulk copy operation:', error);
-    res.status(500).json({ 
-      error: error.message || 'Failed to copy custom values' 
-    });
-  }
-});
-
-// Copy custom fields from one location to another
-app.post('/api/bulk/copy-custom-fields', async (req, res) => {
-  const { companyId, sourceLocationId, targetLocationIds } = req.body;
-
-  try {
-    // Get custom fields from source location
-    const sourceFields = await makeAuthenticatedRequest(
-      `/locations/${sourceLocationId}/customFields`,
-      'GET',
-      companyId
-    );
-
-    const results = [];
-    
-    // Copy to each target location
-    for (const targetLocationId of targetLocationIds) {
-      const locationResults = [];
-      
-      for (const customField of sourceFields.customFields || []) {
-        try {
-          // Create new custom field in target location
-          const fieldData = {
-            name: customField.name,
-            dataType: customField.dataType,
-            position: customField.position,
-            picklistOptions: customField.picklistOptions
-          };
-          
-          if (customField.placeholder) {
-            fieldData.placeholder = customField.placeholder;
-          }
-          
-          const result = await makeAuthenticatedRequest(
-            `/locations/${targetLocationId}/customFields`,
-            'POST',
-            companyId,
-            fieldData
-          );
-          locationResults.push({ success: true, field: result });
-        } catch (error) {
-          locationResults.push({ 
-            success: false, 
-            error: error.message,
-            fieldName: customField.name 
-          });
-        }
-      }
-      
-      results.push({
-        locationId: targetLocationId,
-        results: locationResults
-      });
-    }
-    
-    res.json({ success: true, results });
-  } catch (error) {
-    console.error('Error in bulk copy operation:', error);
-    res.status(500).json({ 
-      error: error.message || 'Failed to copy custom fields' 
+      error: error.message || 'Failed to fetch location details' 
     });
   }
 });
