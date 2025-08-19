@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -21,6 +22,7 @@ const config = {
   clientId: process.env.GHL_APP_CLIENT_ID,
   clientSecret: process.env.GHL_APP_CLIENT_SECRET,
   apiDomain: process.env.GHL_API_DOMAIN || 'https://services.leadconnectorhq.com',
+  ssoKey: process.env.GHL_APP_SSO_KEY || null, // Optional: only needed for embedded custom pages
   redirectUri: process.env.REDIRECT_URI || `http://localhost:${PORT}/authorize-handler`
 };
 
@@ -104,12 +106,31 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// OAuth authorization handler
+// OAuth installation handler - This is where agencies install your app
+app.get('/install', (req, res) => {
+  // Generate the OAuth URL for agencies to install your app
+  const installUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?` +
+    `response_type=code&` +
+    `client_id=${config.clientId}&` +
+    `redirect_uri=${encodeURIComponent(config.redirectUri)}`;
+  
+  res.redirect(installUrl);
+});
+
+// OAuth authorization handler - Handles the callback after installation
 app.get('/authorize-handler', async (req, res) => {
   const { code } = req.query;
   
   if (!code) {
-    return res.status(400).json({ error: 'No authorization code provided' });
+    return res.status(400).send(`
+      <html>
+        <body style="font-family: Arial; padding: 50px; text-align: center;">
+          <h2>Installation Failed</h2>
+          <p>No authorization code provided.</p>
+          <a href="/install">Try Again</a>
+        </body>
+      </html>
+    `);
   }
 
   try {
@@ -128,14 +149,80 @@ app.get('/authorize-handler', async (req, res) => {
     const base64Payload = tokenData.access_token.split('.')[1];
     const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
     
-    // Store token data
+    // Store token data (in production, store in database with company association)
     tokenStore.set(payload.companyId, tokenData);
     
-    // Redirect to the app with success
-    res.redirect(`/?auth=success&companyId=${payload.companyId}`);
+    // Show success page with access instructions
+    res.send(`
+      <html>
+        <head>
+          <title>Installation Successful</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+            }
+            .container {
+              text-align: center;
+              background: rgba(255, 255, 255, 0.1);
+              padding: 50px;
+              border-radius: 20px;
+              backdrop-filter: blur(10px);
+            }
+            h1 { margin-bottom: 20px; }
+            p { margin-bottom: 30px; font-size: 18px; }
+            .button {
+              display: inline-block;
+              padding: 15px 30px;
+              background: white;
+              color: #764ba2;
+              text-decoration: none;
+              border-radius: 10px;
+              font-weight: bold;
+              transition: transform 0.3s;
+            }
+            .button:hover {
+              transform: translateY(-2px);
+            }
+            .url-display {
+              background: rgba(0,0,0,0.3);
+              padding: 15px;
+              border-radius: 10px;
+              margin: 20px 0;
+              word-break: break-all;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>✅ Installation Successful!</h1>
+            <p>Custom Values Manager has been installed for your agency.</p>
+            <div class="url-display">
+              Access your dashboard at:<br>
+              <strong>${req.protocol}://${req.get('host')}/dashboard?companyId=${payload.companyId}</strong>
+            </div>
+            <a href="/dashboard?companyId=${payload.companyId}" class="button">Go to Dashboard</a>
+          </div>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Authorization error:', error);
-    res.redirect('/?auth=error');
+    res.status(500).send(`
+      <html>
+        <body style="font-family: Arial; padding: 50px; text-align: center;">
+          <h2>Installation Failed</h2>
+          <p>${error.message}</p>
+          <a href="/install">Try Again</a>
+        </body>
+      </html>
+    `);
   }
 });
 
@@ -447,6 +534,32 @@ app.post('/api/bulk/copy-custom-fields', async (req, res) => {
     res.status(500).json({ 
       error: error.message || 'Failed to copy custom fields' 
     });
+  }
+});
+
+// SSO Decryption endpoint (only needed if using embedded custom pages)
+app.post('/decrypt-sso', (req, res) => {
+  if (!config.ssoKey) {
+    return res.status(400).json({ 
+      error: 'SSO key not configured. Only needed for embedded custom pages.' 
+    });
+  }
+  
+  try {
+    const { key } = req.body;
+    if (!key) {
+      return res.status(400).json({ error: 'No SSO key provided' });
+    }
+    
+    // SSO decryption logic would go here if implementing custom pages
+    // This is just a placeholder for the structure
+    res.json({ 
+      message: 'SSO endpoint ready but not implemented for standalone app',
+      note: 'This endpoint is only used when app is embedded in GoHighLevel'
+    });
+  } catch (error) {
+    console.error('SSO decryption error:', error);
+    res.status(500).json({ error: 'Failed to decrypt SSO data' });
   }
 });
 
