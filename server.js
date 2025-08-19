@@ -109,10 +109,19 @@ app.get('/', (req, res) => {
 // OAuth installation handler - This is where agencies install your app
 app.get('/install', (req, res) => {
   // Generate the OAuth URL for agencies to install your app
+  const scopes = [
+    'locations.readonly',
+    'locations/customValues.readonly',
+    'locations/customValues.write',
+    'locations/customFields.readonly',
+    'locations/customFields.write'
+  ].join(' ');
+  
   const installUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?` +
     `response_type=code&` +
-    `client_id=${config.clientId}&` +
-    `redirect_uri=${encodeURIComponent(config.redirectUri)}`;
+    `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+    `client_id=${encodeURIComponent(config.clientId)}&` +
+    `scope=${encodeURIComponent(scopes)}`;
   
   res.redirect(installUrl);
 });
