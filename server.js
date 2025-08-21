@@ -21,7 +21,7 @@ const config = {
   clientId: '68a41a4eb5154c8bb56d1555-mei65mus', // HARDCODED
   clientSecret: process.env.GHL_APP_CLIENT_SECRET,
   apiDomain: process.env.GHL_API_DOMAIN || 'https://services.leadconnectorhq.com',
-  redirectUri: process.env.REDIRECT_URI || `http://localhost:${PORT}/authorize-handler`
+  redirectUri: process.env.REDIRECT_URI || 'https://crmzaps-custom-values-manager-v1.onrender.com/authorize-handler'
 };
 
 // Helper function to refresh token
