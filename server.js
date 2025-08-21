@@ -18,10 +18,10 @@ const tokenStore = new Map();
 
 // Configuration - HARDCODED CLIENT_ID ONLY
 const config = {
-  clientId: '68a41a4eb5154c8bb56d1555-mei65mus', // HARDCODED
+  clientId: '65ea6e98b145213004708e09-mel4cupz', // HARDCODED
   clientSecret: process.env.GHL_APP_CLIENT_SECRET,
   apiDomain: process.env.GHL_API_DOMAIN || 'https://services.leadconnectorhq.com',
-  redirectUri: process.env.REDIRECT_URI || 'https://crmzaps-custom-values-manager-v1.onrender.com/authorize-handler'
+  redirectUri: process.env.REDIRECT_URI || 'https://crmzaps-custom-values-manager-1.onrender.com/authorize-handler'
 };
 
 // Helper function to refresh token
