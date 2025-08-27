@@ -68,10 +68,16 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+        }
+
+        .location-name {
             padding: 0.5rem 1rem;
             background: var(--surface-light);
             border-radius: 8px;
             border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .status-indicator {
@@ -85,6 +91,21 @@
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: var(--danger);
+            border-color: var(--danger);
         }
 
         .btn {
@@ -506,8 +527,11 @@
         <div class="header-content">
             <h1>Custom Values Manager</h1>
             <div class="location-info">
-                <div class="status-indicator"></div>
-                <span id="locationName">Loading...</span>
+                <div class="location-name">
+                    <div class="status-indicator"></div>
+                    <span id="locationName">Loading...</span>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
         </div>
     </header>
@@ -578,45 +602,37 @@
         let currentItemType = 'value';
         let editingItemId = null;
 
-        // Initialize on load
+        // Initialize on load - UPDATED FOR PRIVATE INTEGRATION
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             currentLocationId = urlParams.get('locationId');
             
             if (!currentLocationId) {
-                // No locationId - show error
-                showAuthError();
-            } else {
-                // Location ID exists - load data
-                loadLocationData();
-                loadCustomValues();
-                loadCustomFields();
+                // No locationId - redirect to home page for authentication
+                window.location.href = '/';
+                return;
             }
+            
+            // Location ID exists - load data
+            loadLocationData();
+            loadCustomValues();
+            loadCustomFields();
         });
-
-        function showAuthError() {
-            document.getElementById('appContainer').innerHTML = `
-                <div class="error-state">
-                    <h2>Authentication Required</h2>
-                    <p>You need to install this app through the marketplace to access the dashboard.</p>
-                    <a href="/install" class="btn">Install App</a>
-                </div>
-            `;
-        }
 
         async function loadLocationData() {
             try {
                 const response = await fetch(`/api/location/${currentLocationId}`);
                 if (!response.ok) {
                     if (response.status === 401) {
-                        showAuthError();
+                        // Not authenticated, redirect to home
+                        window.location.href = '/';
                         return;
                     }
                     throw new Error('Failed to load location data');
                 }
                 
                 locationData = await response.json();
-                document.getElementById('locationName').textContent = locationData.name || 'Location';
+                document.getElementById('locationName').textContent = locationData.name || currentLocationId;
             } catch (error) {
                 console.error('Error loading location:', error);
                 document.getElementById('locationName').textContent = 'Unknown Location';
@@ -629,12 +645,15 @@
 
             try {
                 const response = await fetch(`/api/custom-values/${currentLocationId}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    renderCustomValues(data.customValues || []);
-                } else {
-                    valuesList.innerHTML = '<div class="empty-state">Failed to load custom values</div>';
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return;
+                    }
+                    throw new Error('Failed to load custom values');
                 }
+                const data = await response.json();
+                renderCustomValues(data.customValues || []);
             } catch (error) {
                 console.error('Error loading custom values:', error);
                 valuesList.innerHTML = '<div class="empty-state">Error loading custom values</div>';
@@ -647,12 +666,15 @@
 
             try {
                 const response = await fetch(`/api/custom-fields/${currentLocationId}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    renderCustomFields(data.customFields || []);
-                } else {
-                    fieldsList.innerHTML = '<div class="empty-state">Failed to load custom fields</div>';
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return;
+                    }
+                    throw new Error('Failed to load custom fields');
                 }
+                const data = await response.json();
+                renderCustomFields(data.customFields || []);
             } catch (error) {
                 console.error('Error loading custom fields:', error);
                 fieldsList.innerHTML = '<div class="empty-state">Error loading custom fields</div>';
@@ -936,6 +958,18 @@
             } catch (error) {
                 console.error('Error deleting item:', error);
                 showToast('Failed to delete item', 'error');
+            }
+        }
+
+        async function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                try {
+                    await fetch(`/api/logout/${currentLocationId}`, { method: 'POST' });
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('Error logging out:', error);
+                    window.location.href = '/';
+                }
             }
         }
 
