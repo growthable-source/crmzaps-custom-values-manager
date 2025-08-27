@@ -13,46 +13,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store tokens (in production, use a proper database)
+// Store tokens by locationId (in production, use a proper database)
 const tokenStore = new Map();
 
-// Configuration - HARDCODED CLIENT_ID ONLY
+// Configuration
 const config = {
-  clientId: '65ea6e98b145213004708e09-mel4cupz', // HARDCODED
-  clientSecret: process.env.GHL_APP_CLIENT_SECRET,
-  apiDomain: process.env.GHL_API_DOMAIN || 'https://services.leadconnectorhq.com',
-  redirectUri: process.env.REDIRECT_URI || 'https://crmzaps-custom-values-manager-1.onrender.com/authorize-handler'
+  apiDomain: process.env.GHL_API_DOMAIN || 'https://services.leadconnectorhq.com'
 };
 
-// Helper function to refresh token
-async function refreshAccessToken(refreshToken) {
-  try {
-    const response = await axios.post(`${config.apiDomain}/oauth/token`, {
-      client_id: '68a41a4eb5154c8bb56d1555-mei65mus', // HARDCODED
-      client_secret: config.clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error refreshing token:', error);
-    throw error;
-  }
-}
-
 // Helper function to make authenticated API calls
-async function makeAuthenticatedRequest(url, method, locationId, data = null) {
-  const tokenData = tokenStore.get(locationId);
-  if (!tokenData) {
-    throw new Error('No token found for this location');
-  }
-
+async function makeAuthenticatedRequest(url, method, token, data = null) {
   try {
     const requestConfig = {
       method,
       url: `${config.apiDomain}${url}`,
       headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
+        'Authorization': `Bearer ${token}`,
         'Version': '2021-07-28',
         'Content-Type': 'application/json'
       }
@@ -65,39 +41,12 @@ async function makeAuthenticatedRequest(url, method, locationId, data = null) {
     const response = await axios(requestConfig);
     return response.data;
   } catch (error) {
-    // If token expired, try to refresh
-    if (error.response?.status === 401 && tokenData.refresh_token) {
-      try {
-        const newTokenData = await refreshAccessToken(tokenData.refresh_token);
-        tokenStore.set(locationId, newTokenData);
-        
-        // Retry the request with new token
-        const retryConfig = {
-          method,
-          url: `${config.apiDomain}${url}`,
-          headers: {
-            'Authorization': `Bearer ${newTokenData.access_token}`,
-            'Version': '2021-07-28',
-            'Content-Type': 'application/json'
-          }
-        };
-        
-        if (data) {
-          retryConfig.data = data;
-        }
-        
-        const response = await axios(retryConfig);
-        return response.data;
-      } catch (refreshError) {
-        console.error('Failed to refresh token:', refreshError);
-        throw refreshError;
-      }
-    }
+    console.error('API Request error:', error.response?.data || error.message);
     throw error;
   }
 }
 
-// Landing page
+// Landing page with token entry
 app.get('/', (req, res) => {
   res.send(`
     <html>
@@ -148,28 +97,81 @@ app.get('/', (req, res) => {
             color: #667eea;
             margin-bottom: 10px;
           }
-          .install-btn {
-            display: inline-block;
-            padding: 18px 40px;
+          .auth-form {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 30px;
+            border-radius: 10px;
+            margin-top: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+          }
+          .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: 600;
+          }
+          .form-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            font-size: 1rem;
+          }
+          .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+          }
+          .btn {
+            padding: 12px 30px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            text-decoration: none;
-            border-radius: 10px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-top: 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
             transition: transform 0.3s, box-shadow 0.3s;
           }
-          .install-btn:hover {
-            transform: translateY(-3px);
+          .btn:hover {
+            transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+          }
+          .help-text {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-top: 8px;
+          }
+          .instructions {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+          }
+          .instructions h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+          }
+          .instructions ol {
+            margin-left: 20px;
+            color: #cbd5e1;
+          }
+          .instructions li {
+            margin-bottom: 10px;
           }
         </style>
       </head>
       <body>
         <div class="container">
           <h1>Custom Values Manager</h1>
-          <p class="subtitle">Effortlessly manage custom values and fields for your location</p>
+          <p class="subtitle">Manage custom values and fields for your location</p>
           
           <div class="features">
             <div class="feature">
@@ -190,81 +192,71 @@ app.get('/', (req, res) => {
             </div>
           </div>
           
-          <a href="/install" class="install-btn">Install to Your Location</a>
+          <div class="auth-form">
+            <h2>Connect Your Location</h2>
+            <form action="/authenticate" method="POST">
+              <div class="form-group">
+                <label class="form-label" for="token">Private Integration Token</label>
+                <input type="text" id="token" name="token" class="form-input" placeholder="Enter your Private Integration token" required>
+                <div class="help-text">This token is generated in your location's Private Integration settings</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="locationId">Location ID</label>
+                <input type="text" id="locationId" name="locationId" class="form-input" placeholder="Enter your Location ID" required>
+                <div class="help-text">You can find this in your location settings</div>
+              </div>
+              <button type="submit" class="btn">Connect to Location</button>
+            </form>
+          </div>
           
-          <p style="margin-top: 40px; color: #64748b; font-size: 0.9rem;">
-            This app requires location-level access with custom values and fields permissions
-          </p>
+          <div class="instructions">
+            <h3>How to get your Private Integration Token:</h3>
+            <ol>
+              <li>Log into your location</li>
+              <li>Go to Settings → Integrations → Private Integration</li>
+              <li>Click "Create New Integration"</li>
+              <li>Name it "Custom Values Manager"</li>
+              <li>Select these scopes: locations.readonly, locations/customValues.write, locations/customFields.write</li>
+              <li>Copy the generated token and paste it above</li>
+            </ol>
+          </div>
         </div>
       </body>
     </html>
   `);
 });
 
-// Dashboard page
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// OAuth installation handler
-app.get('/install', (req, res) => {
-  // HARDCODED CLIENT_ID in URL
-  const installUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?` +
-    `response_type=code&` +
-    `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
-    `client_id=68a41a4eb5154c8bb56d1555-mei65mus&` +  // HARDCODED
-    `scope=locations.readonly locations/customValues.readonly locations/customValues.write locations/customFields.readonly locations/customFields.write`;
+// Authentication endpoint
+app.post('/authenticate', async (req, res) => {
+  const { token, locationId } = req.body;
   
-  res.redirect(installUrl);
-});
-
-// OAuth authorization handler
-app.get('/authorize-handler', async (req, res) => {
-  const { code } = req.query;
-  
-  if (!code) {
-    return res.status(400).send(`
-      <html>
-        <body style="font-family: Arial; padding: 50px; text-align: center;">
-          <h2>Installation Failed</h2>
-          <p>No authorization code provided.</p>
-          <a href="/install">Try Again</a>
-        </body>
-      </html>
-    `);
+  if (!token || !locationId) {
+    return res.status(400).send('Token and Location ID are required');
   }
-
+  
   try {
-    // Exchange code for token - HARDCODED CLIENT_ID
-    const tokenResponse = await axios.post(`${config.apiDomain}/oauth/token`, {
-      client_id: '68a41a4eb5154c8bb56d1555-mei65mus', // HARDCODED
-      client_secret: config.clientSecret,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: config.redirectUri
-    });
-
-    const tokenData = tokenResponse.data;
+    // Test the token by making a simple API call
+    const location = await makeAuthenticatedRequest(
+      `/locations/${locationId}`,
+      'GET',
+      token
+    );
     
-    // Decode the token to get location info
-    const base64Payload = tokenData.access_token.split('.')[1];
-    const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
+    // Store the token for this location
+    tokenStore.set(locationId, token);
     
-    // For sub-account apps, we get locationId directly
-    const locationId = payload.locationId;
+    // Redirect to dashboard
+    res.redirect(`/dashboard?locationId=${locationId}`);
     
-    // Store token data
-    tokenStore.set(locationId, tokenData);
-    
-    // Show success page
-    res.send(`
+  } catch (error) {
+    console.error('Authentication error:', error.response?.data || error.message);
+    res.status(401).send(`
       <html>
         <head>
-          <title>Installation Successful</title>
           <style>
             body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              font-family: Arial, sans-serif;
+              background: linear-gradient(135deg, #0a0e27 0%, #1e293b 100%);
               color: white;
               display: flex;
               align-items: center;
@@ -272,62 +264,63 @@ app.get('/authorize-handler', async (req, res) => {
               height: 100vh;
               margin: 0;
             }
-            .container {
+            .error-container {
               text-align: center;
-              background: rgba(255, 255, 255, 0.1);
-              padding: 50px;
-              border-radius: 20px;
-              backdrop-filter: blur(10px);
-            }
-            h1 { margin-bottom: 20px; }
-            p { margin-bottom: 30px; font-size: 18px; }
-            .button {
-              display: inline-block;
-              padding: 15px 30px;
-              background: white;
-              color: #764ba2;
-              text-decoration: none;
+              padding: 40px;
+              background: rgba(239, 68, 68, 0.1);
               border-radius: 10px;
-              font-weight: bold;
-              transition: transform 0.3s;
+              border: 1px solid rgba(239, 68, 68, 0.3);
             }
-            .button:hover {
-              transform: translateY(-2px);
+            .btn {
+              display: inline-block;
+              margin-top: 20px;
+              padding: 10px 20px;
+              background: #ef4444;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
             }
           </style>
         </head>
         <body>
-          <div class="container">
-            <h1>✅ Installation Successful!</h1>
-            <p>Custom Values Manager has been installed for this location.</p>
-            <a href="/dashboard?locationId=${locationId}" class="button">Go to Dashboard</a>
+          <div class="error-container">
+            <h2>Authentication Failed</h2>
+            <p>Invalid token or location ID. Please check your credentials and try again.</p>
+            <a href="/" class="btn">Go Back</a>
           </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('Authorization error:', error);
-    res.status(500).send(`
-      <html>
-        <body style="font-family: Arial; padding: 50px; text-align: center;">
-          <h2>Installation Failed</h2>
-          <p>${error.message}</p>
-          <a href="/install">Try Again</a>
         </body>
       </html>
     `);
   }
 });
 
-// API Routes for Custom Values
+// Dashboard page
+app.get('/dashboard', (req, res) => {
+  const { locationId } = req.query;
+  
+  if (!locationId || !tokenStore.has(locationId)) {
+    return res.redirect('/');
+  }
+  
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// API Routes - Updated to use Private Integration tokens
+
+// Get custom values
 app.get('/api/custom-values/:locationId', async (req, res) => {
   const { locationId } = req.params;
+  const token = tokenStore.get(locationId);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const customValues = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues`,
       'GET',
-      locationId
+      token
     );
     res.json(customValues);
   } catch (error) {
@@ -338,15 +331,21 @@ app.get('/api/custom-values/:locationId', async (req, res) => {
   }
 });
 
+// Create custom value
 app.post('/api/custom-values/:locationId', async (req, res) => {
   const { locationId } = req.params;
+  const token = tokenStore.get(locationId);
   const customValueData = req.body;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues`,
       'POST',
-      locationId,
+      token,
       customValueData
     );
     res.json(result);
@@ -358,15 +357,21 @@ app.post('/api/custom-values/:locationId', async (req, res) => {
   }
 });
 
+// Update custom value
 app.put('/api/custom-values/:locationId/:customValueId', async (req, res) => {
   const { locationId, customValueId } = req.params;
+  const token = tokenStore.get(locationId);
   const updateData = req.body;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues/${customValueId}`,
       'PUT',
-      locationId,
+      token,
       updateData
     );
     res.json(result);
@@ -378,14 +383,20 @@ app.put('/api/custom-values/:locationId/:customValueId', async (req, res) => {
   }
 });
 
+// Delete custom value
 app.delete('/api/custom-values/:locationId/:customValueId', async (req, res) => {
   const { locationId, customValueId } = req.params;
+  const token = tokenStore.get(locationId);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     await makeAuthenticatedRequest(
       `/locations/${locationId}/customValues/${customValueId}`,
       'DELETE',
-      locationId
+      token
     );
     res.json({ success: true });
   } catch (error) {
@@ -396,15 +407,20 @@ app.delete('/api/custom-values/:locationId/:customValueId', async (req, res) => 
   }
 });
 
-// API Routes for Custom Fields
+// Get custom fields
 app.get('/api/custom-fields/:locationId', async (req, res) => {
   const { locationId } = req.params;
+  const token = tokenStore.get(locationId);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const customFields = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields`,
       'GET',
-      locationId
+      token
     );
     res.json(customFields);
   } catch (error) {
@@ -415,15 +431,21 @@ app.get('/api/custom-fields/:locationId', async (req, res) => {
   }
 });
 
+// Create custom field
 app.post('/api/custom-fields/:locationId', async (req, res) => {
   const { locationId } = req.params;
+  const token = tokenStore.get(locationId);
   const customFieldData = req.body;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields`,
       'POST',
-      locationId,
+      token,
       customFieldData
     );
     res.json(result);
@@ -435,15 +457,21 @@ app.post('/api/custom-fields/:locationId', async (req, res) => {
   }
 });
 
+// Update custom field
 app.put('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
   const { locationId, customFieldId } = req.params;
+  const token = tokenStore.get(locationId);
   const updateData = req.body;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const result = await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields/${customFieldId}`,
       'PUT',
-      locationId,
+      token,
       updateData
     );
     res.json(result);
@@ -455,14 +483,20 @@ app.put('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
   }
 });
 
+// Delete custom field
 app.delete('/api/custom-fields/:locationId/:customFieldId', async (req, res) => {
   const { locationId, customFieldId } = req.params;
+  const token = tokenStore.get(locationId);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     await makeAuthenticatedRequest(
       `/locations/${locationId}/customFields/${customFieldId}`,
       'DELETE',
-      locationId
+      token
     );
     res.json({ success: true });
   } catch (error) {
@@ -476,12 +510,17 @@ app.delete('/api/custom-fields/:locationId/:customFieldId', async (req, res) => 
 // Get location details
 app.get('/api/location/:locationId', async (req, res) => {
   const { locationId } = req.params;
+  const token = tokenStore.get(locationId);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
     const location = await makeAuthenticatedRequest(
       `/locations/${locationId}`,
       'GET',
-      locationId
+      token
     );
     res.json(location);
   } catch (error) {
@@ -490,6 +529,13 @@ app.get('/api/location/:locationId', async (req, res) => {
       error: error.message || 'Failed to fetch location details' 
     });
   }
+});
+
+// Logout endpoint
+app.post('/api/logout/:locationId', (req, res) => {
+  const { locationId } = req.params;
+  tokenStore.delete(locationId);
+  res.json({ success: true });
 });
 
 // Health check endpoint
