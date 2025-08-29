@@ -608,8 +608,15 @@
             currentLocationId = urlParams.get('locationId');
             
             if (!currentLocationId) {
-                // No locationId - redirect to home page for authentication
-                window.location.href = '/';
+                // No locationId - they need to authenticate first
+                // Don't redirect to avoid loop - show error message
+                document.getElementById('appContainer').innerHTML = `
+                    <div class="error-state">
+                        <h2>Authentication Required</h2>
+                        <p>Please authenticate with your Private Integration token first.</p>
+                        <a href="/" class="btn">Go to Login</a>
+                    </div>
+                `;
                 return;
             }
             
