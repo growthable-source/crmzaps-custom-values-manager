@@ -609,12 +609,12 @@
             
             if (!currentLocationId) {
                 // No locationId - they need to authenticate first
-                // Don't redirect to avoid loop - show error message
+                // Clear the URL and show login link
                 document.getElementById('appContainer').innerHTML = `
                     <div class="error-state">
                         <h2>Authentication Required</h2>
                         <p>Please authenticate with your Private Integration token first.</p>
-                        <a href="/" class="btn">Go to Login</a>
+                        <button class="btn" onclick="window.location.href='/'">Go to Login</button>
                     </div>
                 `;
                 return;
