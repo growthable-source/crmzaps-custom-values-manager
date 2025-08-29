@@ -198,12 +198,7 @@ app.get('/', (req, res) => {
               <div class="form-group">
                 <label class="form-label" for="token">Private Integration Token</label>
                 <input type="text" id="token" name="token" class="form-input" placeholder="Enter your Private Integration token" required>
-                <div class="help-text">This token is generated in your location's Private Integration settings</div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="locationId">Location ID</label>
-                <input type="text" id="locationId" name="locationId" class="form-input" placeholder="Enter your Location ID" required>
-                <div class="help-text">You can find this in your location settings</div>
+                <div class="help-text">This token is specific to your location and provides all necessary access</div>
               </div>
               <button type="submit" class="btn">Connect to Location</button>
             </form>
@@ -213,8 +208,8 @@ app.get('/', (req, res) => {
             <h3>How to get your Private Integration Token:</h3>
             <ol>
               <li>Log into your location</li>
-              <li>Go to Settings → Integrations → Private Integration</li>
-              <li>Click "Create New Integration"</li>
+              <li>Go to Settings → Integrations → Private Integration Apps</li>
+              <li>Click "Create App"</li>
               <li>Name it "Custom Values Manager"</li>
               <li>Select these scopes: locations.readonly, locations/customValues.write, locations/customFields.write</li>
               <li>Copy the generated token and paste it above</li>
@@ -226,27 +221,57 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Authentication endpoint
+// Authentication endpoint - extract locationId from token
 app.post('/authenticate', async (req, res) => {
-  const { token, locationId } = req.body;
+  const { token } = req.body;
   
-  if (!token || !locationId) {
-    return res.status(400).send('Token and Location ID are required');
+  if (!token) {
+    return res.status(400).send('Token is required');
   }
   
   try {
-    // Test the token by making a simple API call
-    const location = await makeAuthenticatedRequest(
-      `/locations/${locationId}`,
-      'GET',
-      token
-    );
+    // Make a test API call to get location info
+    // The token itself contains the location context
+    const response = await axios.get(`${config.apiDomain}/locations/search`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Version': '2021-07-28'
+      },
+      params: {
+        limit: 1
+      }
+    });
     
-    // Store the token for this location
-    tokenStore.set(locationId, token);
+    // Get the location ID from the response
+    const locationId = response.data.locations?.[0]?.id;
     
-    // Redirect to dashboard
-    res.redirect(`/dashboard?locationId=${locationId}`);
+    if (!locationId) {
+      // Try alternate endpoint to get location info
+      const meResponse = await axios.get(`${config.apiDomain}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Version': '2021-07-28'
+        }
+      });
+      
+      const extractedLocationId = meResponse.data.locationId || meResponse.data.companyId;
+      
+      if (!extractedLocationId) {
+        throw new Error('Could not determine location ID from token');
+      }
+      
+      // Store the token for this location
+      tokenStore.set(extractedLocationId, token);
+      
+      // Redirect to dashboard
+      res.redirect(`/dashboard?locationId=${extractedLocationId}`);
+    } else {
+      // Store the token for this location
+      tokenStore.set(locationId, token);
+      
+      // Redirect to dashboard
+      res.redirect(`/dashboard?locationId=${locationId}`);
+    }
     
   } catch (error) {
     console.error('Authentication error:', error.response?.data || error.message);
@@ -285,7 +310,8 @@ app.post('/authenticate', async (req, res) => {
         <body>
           <div class="error-container">
             <h2>Authentication Failed</h2>
-            <p>Invalid token or location ID. Please check your credentials and try again.</p>
+            <p>Invalid token or insufficient permissions. Please check your token and try again.</p>
+            <p style="font-size: 0.9em; margin-top: 10px;">Make sure you have the required scopes: locations.readonly, locations/customValues.write, locations/customFields.write</p>
             <a href="/" class="btn">Go Back</a>
           </div>
         </body>
