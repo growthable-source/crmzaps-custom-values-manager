@@ -315,6 +315,7 @@
             <h2 style="margin-bottom: 1rem;">Your Locations</h2>
             
             <div class="add-location-form">
+                <input type="text" id="locationId" placeholder="Enter Location ID" style="margin-bottom: 0.5rem;">
                 <input type="text" id="newToken" placeholder="Enter Private Integration Token">
                 <button class="btn" style="width: 100%;" onclick="addLocation()">Add Location</button>
             </div>
@@ -459,11 +460,13 @@
         }
 
         async function addLocation() {
+            const locationIdInput = document.getElementById('locationId');
             const tokenInput = document.getElementById('newToken');
+            const locationId = locationIdInput.value.trim();
             const newToken = tokenInput.value.trim();
             
-            if (!newToken) {
-                alert('Please enter a Private Integration token');
+            if (!locationId || !newToken) {
+                alert('Please enter both Location ID and Private Integration token');
                 return;
             }
 
@@ -474,10 +477,11 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ token: newToken })
+                    body: JSON.stringify({ token: newToken, locationId: locationId })
                 });
                 
                 if (response.ok) {
+                    locationIdInput.value = '';
                     tokenInput.value = '';
                     loadLocations();
                 } else {
