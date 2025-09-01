@@ -669,7 +669,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Value Type</label>
-                        <select class="form-select" id="valueType" onchange="toggleValueInput()">
+                        <select class="form-input" id="valueType" onchange="toggleValueInput()">
                             <option value="text">Text</option>
                             <option value="image">Image</option>
                             <option value="url">URL</option>
@@ -677,7 +677,7 @@
                     </div>
                     <div class="form-group" id="textValueGroup">
                         <label class="form-label">Value</label>
-                        <textarea class="form-textarea" id="itemValue" required></textarea>
+                        <textarea class="form-textarea" id="itemValue"></textarea>
                     </div>
                     <div class="form-group" id="imageValueGroup" style="display: none;">
                         <label class="form-label">Upload Image</label>
@@ -749,54 +749,65 @@
         async function saveItem(event) {
             event.preventDefault();
             
-            const data = { name: document.getElementById('itemName').value };
-            
-            if (currentItemType === 'value') {
-                const valueType = document.getElementById('valueType')?.value || 'text';
-                
-                if (valueType === 'image') {
-                    const fileInput = document.getElementById('imageFile');
-                    const file = fileInput.files[0];
-                    
-                    if (!file) {
-                        alert('Please select an image');
-                        return;
-                    }
-                    
-                    // Upload image to Supabase Storage
-                    const fileName = `${Date.now()}-${file.name}`;
-                    const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                        .from('custom-value-images')
-                        .upload(fileName, file, {
-                            cacheControl: '3600',
-                            upsert: false
-                        });
-                    
-                    if (uploadError) {
-                        alert('Failed to upload image: ' + uploadError.message);
-                        return;
-                    }
-                    
-                    // Get public URL
-                    const { data: urlData } = supabaseClient.storage
-                        .from('custom-value-images')
-                        .getPublicUrl(fileName);
-                    
-                    data.value = urlData.publicUrl;
-                } else {
-                    data.value = document.getElementById('itemValue').value;
-                }
-            } else {
-                data.dataType = document.getElementById('dataType').value;
-            }
-            
-            const endpoint = currentItemType === 'value' ? 'customValues' : 'customFields';
-            const method = editingItemId ? 'PUT' : 'POST';
-            const url = editingItemId 
-                ? `/api/locations/${selectedLocationId}/${endpoint}/${editingItemId}`
-                : `/api/locations/${selectedLocationId}/${endpoint}`;
-            
             try {
+                const data = { name: document.getElementById('itemName').value };
+                
+                if (currentItemType === 'value') {
+                    const valueType = document.getElementById('valueType')?.value || 'text';
+                    
+                    if (valueType === 'image') {
+                        const fileInput = document.getElementById('imageFile');
+                        const file = fileInput.files[0];
+                        
+                        if (!file) {
+                            alert('Please select an image');
+                            return;
+                        }
+                        
+                        console.log('Uploading image:', file.name);
+                        
+                        // Upload image to Supabase Storage
+                        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                        const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                            .from('custom-value-images')
+                            .upload(fileName, file, {
+                                cacheControl: '3600',
+                                upsert: false
+                            });
+                        
+                        if (uploadError) {
+                            console.error('Upload error:', uploadError);
+                            alert('Failed to upload image: ' + uploadError.message);
+                            return;
+                        }
+                        
+                        // Get public URL
+                        const { data: urlData } = supabaseClient.storage
+                            .from('custom-value-images')
+                            .getPublicUrl(fileName);
+                        
+                        console.log('Image URL:', urlData.publicUrl);
+                        data.value = urlData.publicUrl;
+                    } else {
+                        const textValue = document.getElementById('itemValue').value;
+                        if (!textValue) {
+                            alert('Please enter a value');
+                            return;
+                        }
+                        data.value = textValue;
+                    }
+                } else {
+                    data.dataType = document.getElementById('dataType').value;
+                }
+                
+                const endpoint = currentItemType === 'value' ? 'customValues' : 'customFields';
+                const method = editingItemId ? 'PUT' : 'POST';
+                const url = editingItemId 
+                    ? `/api/locations/${selectedLocationId}/${endpoint}/${editingItemId}`
+                    : `/api/locations/${selectedLocationId}/${endpoint}`;
+                
+                console.log('Saving:', data);
+                
                 const response = await fetch(url, {
                     method,
                     headers: {
@@ -810,10 +821,12 @@
                     closeModal();
                     currentItemType === 'value' ? loadCustomValues() : loadCustomFields();
                 } else {
-                    alert('Error saving item');
+                    const error = await response.json();
+                    alert('Error saving item: ' + (error.error || 'Unknown error'));
                 }
             } catch (error) {
-                alert('Network error');
+                console.error('Save error:', error);
+                alert('Error: ' + error.message);
             }
         }
 
