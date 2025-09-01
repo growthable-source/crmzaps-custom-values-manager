@@ -315,7 +315,6 @@
             <h2 style="margin-bottom: 1rem;">Your Locations</h2>
             
             <div class="add-location-form">
-                <input type="text" id="locationId" placeholder="Enter Location ID" style="margin-bottom: 0.5rem;">
                 <input type="text" id="newToken" placeholder="Enter Private Integration Token">
                 <button class="btn" style="width: 100%;" onclick="addLocation()">Add Location</button>
             </div>
@@ -460,13 +459,11 @@
         }
 
         async function addLocation() {
-            const locationIdInput = document.getElementById('locationId');
             const tokenInput = document.getElementById('newToken');
-            const locationId = locationIdInput.value.trim();
             const newToken = tokenInput.value.trim();
             
-            if (!locationId || !newToken) {
-                alert('Please enter both Location ID and Private Integration token');
+            if (!newToken) {
+                alert('Please enter a Private Integration token');
                 return;
             }
 
@@ -477,11 +474,10 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ token: newToken, locationId: locationId })
+                    body: JSON.stringify({ token: newToken })
                 });
                 
                 if (response.ok) {
-                    locationIdInput.value = '';
                     tokenInput.value = '';
                     loadLocations();
                 } else {
@@ -592,18 +588,33 @@
                 return;
             }
 
-            container.innerHTML = values.map(value => `
-                <div class="item-card">
-                    <div class="item-header">
-                        <div style="font-weight: 600;">${value.name}</div>
-                        <div>
-                            <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
+            container.innerHTML = values.map(value => {
+                // Check if value is an image URL
+                const isImageUrl = value.value && (
+                    value.value.includes('supabase') || 
+                    value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                    value.value.startsWith('https://') && value.value.includes('image')
+                );
+                
+                return `
+                    <div class="item-card">
+                        <div class="item-header">
+                            <div style="font-weight: 600;">${value.name}</div>
+                            <div>
+                                <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
+                            </div>
+                        </div>
+                        <div class="item-value">
+                            ${isImageUrl 
+                                ? `<img src="${value.value}" style="max-width: 100%; height: auto; border-radius: 6px;" alt="${value.name}">
+                                   <div style="margin-top: 0.5rem; font-size: 0.875rem; word-break: break-all;">${value.value}</div>`
+                                : value.value
+                            }
                         </div>
                     </div>
-                    <div class="item-value">${value.value}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function renderCustomFields(fields) {
@@ -657,8 +668,21 @@
                         <input type="text" class="form-input" id="itemName" required>
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Value Type</label>
+                        <select class="form-select" id="valueType" onchange="toggleValueInput()">
+                            <option value="text">Text</option>
+                            <option value="image">Image</option>
+                            <option value="url">URL</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="textValueGroup">
                         <label class="form-label">Value</label>
                         <textarea class="form-textarea" id="itemValue" required></textarea>
+                    </div>
+                    <div class="form-group" id="imageValueGroup" style="display: none;">
+                        <label class="form-label">Upload Image</label>
+                        <input type="file" class="form-input" id="imageFile" accept="image/*">
+                        <small style="color: var(--text-secondary);">Image will be uploaded and URL will be stored as value</small>
                     </div>
                 `;
             } else {
@@ -685,6 +709,20 @@
             }
             
             document.getElementById('itemModal').classList.add('active');
+        }
+
+        function toggleValueInput() {
+            const valueType = document.getElementById('valueType').value;
+            const textGroup = document.getElementById('textValueGroup');
+            const imageGroup = document.getElementById('imageValueGroup');
+            
+            if (valueType === 'image') {
+                textGroup.style.display = 'none';
+                imageGroup.style.display = 'block';
+            } else {
+                textGroup.style.display = 'block';
+                imageGroup.style.display = 'none';
+            }
         }
 
         function editValue(value) {
@@ -714,7 +752,40 @@
             const data = { name: document.getElementById('itemName').value };
             
             if (currentItemType === 'value') {
-                data.value = document.getElementById('itemValue').value;
+                const valueType = document.getElementById('valueType')?.value || 'text';
+                
+                if (valueType === 'image') {
+                    const fileInput = document.getElementById('imageFile');
+                    const file = fileInput.files[0];
+                    
+                    if (!file) {
+                        alert('Please select an image');
+                        return;
+                    }
+                    
+                    // Upload image to Supabase Storage
+                    const fileName = `${Date.now()}-${file.name}`;
+                    const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                        .from('custom-value-images')
+                        .upload(fileName, file, {
+                            cacheControl: '3600',
+                            upsert: false
+                        });
+                    
+                    if (uploadError) {
+                        alert('Failed to upload image: ' + uploadError.message);
+                        return;
+                    }
+                    
+                    // Get public URL
+                    const { data: urlData } = supabaseClient.storage
+                        .from('custom-value-images')
+                        .getPublicUrl(fileName);
+                    
+                    data.value = urlData.publicUrl;
+                } else {
+                    data.value = document.getElementById('itemValue').value;
+                }
             } else {
                 data.dataType = document.getElementById('dataType').value;
             }
