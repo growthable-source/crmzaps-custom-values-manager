@@ -343,10 +343,36 @@
                 </div>
 
                 <div class="tab-content active" id="valuesTab">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <h3>Custom Values</h3>
-                        <button class="btn" onclick="openModal('value')">Add Custom Value</button>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <button class="btn btn-small" onclick="openFolderModal()">📁 New Folder</button>
+                            <button class="btn" onclick="openModal('value')">Add Custom Value</button>
+                        </div>
                     </div>
+                    
+                    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
+                        <select class="form-input" style="width: 150px; padding: 0.5rem;" onchange="filterByType(this.value)">
+                            <option value="all">All Types</option>
+                            <option value="text">Text</option>
+                            <option value="image">Images</option>
+                            <option value="url">URLs</option>
+                        </select>
+                        
+                        <select class="form-input" style="width: 150px; padding: 0.5rem;" onchange="sortValues(this.value)">
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="name">Name (A-Z)</option>
+                        </select>
+                        
+                        <select class="form-input" style="width: 200px; padding: 0.5rem;" id="folderFilter" onchange="filterByFolder(this.value)">
+                            <option value="all">All Folders</option>
+                            <option value="uncategorized">Uncategorized</option>
+                        </select>
+                    </div>
+                    
+                    <div id="foldersContainer" style="margin-bottom: 2rem;"></div>
+                    
                     <div class="items-grid" id="valuesList">
                         <div class="empty-state">
                             <div class="loading"></div>
@@ -403,6 +429,11 @@
         let selectedLocationId = null;
         let currentItemType = 'value';
         let editingItemId = null;
+        let allCustomValues = [];
+        let currentFilter = 'all';
+        let currentSort = 'newest';
+        let currentFolder = 'all';
+        let folders = [];
 
         // Load user data and locations on page load
         window.addEventListener('DOMContentLoaded', async () => {
@@ -549,11 +580,119 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    renderCustomValues(data.customValues || []);
+                    allCustomValues = data.customValues || [];
+                    
+                    // Add metadata to values
+                    allCustomValues = allCustomValues.map((value, index) => {
+                        // Detect type from value
+                        let type = 'text';
+                        if (value.value && (
+                            value.value.includes('supabase') || 
+                            value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                            (value.value.startsWith('https://') && value.value.includes('image'))
+                        )) {
+                            type = 'image';
+                        } else if (value.value && value.value.startsWith('http')) {
+                            type = 'url';
+                        }
+                        
+                        // Extract folder from name if it contains [folder] prefix
+                        let folder = '';
+                        let displayName = value.name;
+                        const folderMatch = value.name.match(/^\[([^\]]+)\]\s*(.+)/);
+                        if (folderMatch) {
+                            folder = folderMatch[1];
+                            displayName = folderMatch[2];
+                            
+                            // Add to folders list if not already there
+                            if (!folders.includes(folder)) {
+                                folders.push(folder);
+                                updateFolderFilter();
+                            }
+                        }
+                        
+                        return {
+                            ...value,
+                            type,
+                            folder,
+                            displayName,
+                            createdIndex: allCustomValues.length - index // Simulate creation order
+                        };
+                    });
+                    
+                    applyFiltersAndSort();
                 }
             } catch (error) {
                 console.error('Error loading custom values:', error);
                 container.innerHTML = '<div class="empty-state">Error loading custom values</div>';
+            }
+        }
+        
+        function applyFiltersAndSort() {
+            let filtered = [...allCustomValues];
+            
+            // Apply type filter
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(v => v.type === currentFilter);
+            }
+            
+            // Apply folder filter
+            if (currentFolder === 'uncategorized') {
+                filtered = filtered.filter(v => !v.folder);
+            } else if (currentFolder !== 'all') {
+                filtered = filtered.filter(v => v.folder === currentFolder);
+            }
+            
+            // Apply sorting
+            switch(currentSort) {
+                case 'newest':
+                    filtered.sort((a, b) => a.createdIndex - b.createdIndex);
+                    break;
+                case 'oldest':
+                    filtered.sort((a, b) => b.createdIndex - a.createdIndex);
+                    break;
+                case 'name':
+                    filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
+                    break;
+            }
+            
+            renderCustomValues(filtered);
+        }
+        
+        function filterByType(type) {
+            currentFilter = type;
+            applyFiltersAndSort();
+        }
+        
+        function sortValues(sortType) {
+            currentSort = sortType;
+            applyFiltersAndSort();
+        }
+        
+        function filterByFolder(folder) {
+            currentFolder = folder;
+            applyFiltersAndSort();
+        }
+        
+        function updateFolderFilter() {
+            const select = document.getElementById('folderFilter');
+            if (select) {
+                const currentValue = select.value;
+                select.innerHTML = `
+                    <option value="all">All Folders</option>
+                    <option value="uncategorized">Uncategorized</option>
+                    ${folders.map(f => `<option value="${f}">${f}</option>`).join('')}
+                `;
+                select.value = currentValue;
+            }
+        }
+        
+        function openFolderModal() {
+            const folderName = prompt('Enter new folder name:');
+            if (folderName && !folders.includes(folderName)) {
+                folders.push(folderName);
+                updateFolderFilter();
+                alert(`Folder "${folderName}" created! Select it when creating new values.`);
             }
         }
 
@@ -588,33 +727,83 @@
                 return;
             }
 
-            container.innerHTML = values.map(value => {
-                // Check if value is an image URL
-                const isImageUrl = value.value && (
-                    value.value.includes('supabase') || 
-                    value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
-                    value.value.startsWith('https://') && value.value.includes('image')
-                );
-                
-                return `
-                    <div class="item-card">
-                        <div class="item-header">
-                            <div style="font-weight: 600;">${value.name}</div>
-                            <div>
-                                <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
-                                <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
+            // Group by folders
+            const grouped = {};
+            const uncategorized = [];
+            
+            values.forEach(value => {
+                if (value.folder) {
+                    if (!grouped[value.folder]) {
+                        grouped[value.folder] = [];
+                    }
+                    grouped[value.folder].push(value);
+                } else {
+                    uncategorized.push(value);
+                }
+            });
+            
+            let html = '';
+            
+            // Render by folders if viewing all folders
+            if (currentFolder === 'all' && Object.keys(grouped).length > 0) {
+                // Render folders
+                Object.keys(grouped).sort().forEach(folder => {
+                    html += `
+                        <div style="margin-bottom: 2rem;">
+                            <h4 style="color: var(--primary); margin-bottom: 1rem;">📁 ${folder}</h4>
+                            <div class="items-grid">
+                                ${grouped[folder].map(value => renderSingleValue(value)).join('')}
                             </div>
                         </div>
-                        <div class="item-value">
-                            ${isImageUrl 
-                                ? `<img src="${value.value}" style="max-width: 100%; height: auto; border-radius: 6px;" alt="${value.name}">
-                                   <div style="margin-top: 0.5rem; font-size: 0.875rem; word-break: break-all;">${value.value}</div>`
-                                : value.value
-                            }
+                    `;
+                });
+                
+                // Render uncategorized
+                if (uncategorized.length > 0) {
+                    html += `
+                        <div style="margin-bottom: 2rem;">
+                            <h4 style="color: var(--text-secondary); margin-bottom: 1rem;">📋 Uncategorized</h4>
+                            <div class="items-grid">
+                                ${uncategorized.map(value => renderSingleValue(value)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                // Render flat list
+                html = values.map(value => renderSingleValue(value)).join('');
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function renderSingleValue(value) {
+            const typeIcon = value.type === 'image' ? '🖼️' : value.type === 'url' ? '🔗' : '📝';
+            
+            return `
+                <div class="item-card">
+                    <div class="item-header">
+                        <div>
+                            <span style="margin-right: 0.5rem;">${typeIcon}</span>
+                            <span style="font-weight: 600;">${value.displayName || value.name}</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
                         </div>
                     </div>
-                `;
-            }).join('');
+                    <div class="item-value">
+                        ${value.type === 'image'
+                            ? `<img src="${value.value}" style="max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; object-fit: cover;" alt="${value.name}">
+                               <div style="margin-top: 0.5rem; font-size: 0.875rem; word-break: break-all; color: var(--text-secondary);">${value.value}</div>`
+                            : value.type === 'url'
+                            ? `<a href="${value.value}" target="_blank" style="color: var(--primary); text-decoration: none;">🔗 ${value.value}</a>`
+                            : value.value
+                        }
+                    </div>
+                    ${value.folder ? `<div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">📁 ${value.folder}</div>` : ''}
+                </div>
+            `;
         }
 
         function renderCustomFields(fields) {
@@ -662,10 +851,22 @@
             document.getElementById('modalTitle').textContent = type === 'value' ? 'Add Custom Value' : 'Add Custom Field';
             
             if (type === 'value') {
+                // Get folder options
+                const folderOptions = folders.map(f => 
+                    `<option value="${f}">${f}</option>`
+                ).join('');
+                
                 document.getElementById('modalFields').innerHTML = `
                     <div class="form-group">
                         <label class="form-label">Name</label>
                         <input type="text" class="form-input" id="itemName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Folder</label>
+                        <select class="form-input" id="valueFolder">
+                            <option value="">Uncategorized</option>
+                            ${folderOptions}
+                        </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Value Type</label>
@@ -729,14 +930,62 @@
             currentItemType = 'value';
             editingItemId = value.id;
             document.getElementById('modalTitle').textContent = 'Edit Custom Value';
+            
+            // Extract folder and actual name
+            let folder = '';
+            let actualName = value.name;
+            const folderMatch = value.name.match(/^\[([^\]]+)\]\s*(.+)/);
+            if (folderMatch) {
+                folder = folderMatch[1];
+                actualName = folderMatch[2];
+            }
+            
+            // Get folder options
+            const folderOptions = folders.map(f => 
+                `<option value="${f}" ${f === folder ? 'selected' : ''}>${f}</option>`
+            ).join('');
+            
+            // Detect value type
+            let valueType = 'text';
+            if (value.value && (
+                value.value.includes('supabase') || 
+                value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                (value.value.startsWith('https://') && value.value.includes('image'))
+            )) {
+                valueType = 'image';
+            } else if (value.value && value.value.startsWith('http')) {
+                valueType = 'url';
+            }
+            
             document.getElementById('modalFields').innerHTML = `
                 <div class="form-group">
                     <label class="form-label">Name</label>
-                    <input type="text" class="form-input" id="itemName" value="${value.name}" required>
+                    <input type="text" class="form-input" id="itemName" value="${actualName}" required>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Folder</label>
+                    <select class="form-input" id="valueFolder">
+                        <option value="" ${!folder ? 'selected' : ''}>Uncategorized</option>
+                        ${folderOptions}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Value Type</label>
+                    <select class="form-input" id="valueType" value="${valueType}" onchange="toggleValueInput()">
+                        <option value="text" ${valueType === 'text' ? 'selected' : ''}>Text</option>
+                        <option value="image" ${valueType === 'image' ? 'selected' : ''}>Image</option>
+                        <option value="url" ${valueType === 'url' ? 'selected' : ''}>URL</option>
+                    </select>
+                </div>
+                <div class="form-group" id="textValueGroup" style="${valueType === 'image' ? 'display: none;' : ''}">
                     <label class="form-label">Value</label>
                     <textarea class="form-textarea" id="itemValue">${value.value}</textarea>
+                </div>
+                <div class="form-group" id="imageValueGroup" style="${valueType === 'image' ? '' : 'display: none;'}">
+                    <label class="form-label">Current Image</label>
+                    <img src="${value.value}" style="max-width: 100%; max-height: 200px; border-radius: 6px;">
+                    <label class="form-label" style="margin-top: 1rem;">Replace Image (optional)</label>
+                    <input type="file" class="form-input" id="imageFile" accept="image/*">
                 </div>
             `;
             document.getElementById('itemModal').classList.add('active');
@@ -754,6 +1003,12 @@
                 
                 if (currentItemType === 'value') {
                     const valueType = document.getElementById('valueType')?.value || 'text';
+                    const folder = document.getElementById('valueFolder')?.value;
+                    
+                    // Add folder prefix to name if folder is selected
+                    if (folder) {
+                        data.name = `[${folder}] ${data.name}`;
+                    }
                     
                     if (valueType === 'image') {
                         const fileInput = document.getElementById('imageFile');
