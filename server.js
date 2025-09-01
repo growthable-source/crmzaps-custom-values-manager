@@ -236,34 +236,32 @@ app.get('/api/locations', authenticateUser, async (req, res) => {
 
 // Add a new location
 app.post('/api/locations', authenticateUser, async (req, res) => {
-  const { token } = req.body;
+  const { token, locationId } = req.body;
   
-  if (!token) {
-    return res.status(400).json({ error: 'Token required' });
+  if (!token || !locationId) {
+    return res.status(400).json({ error: 'Token and Location ID required' });
   }
   
   try {
-    // Validate token and get location info
-    const response = await axios.get(`${GHL_API}/locations/search`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Version': '2021-07-28'
-      },
-      params: { limit: 1 }
-    });
+    // Test that the token works by trying to fetch custom values
+    const response = await axios.get(
+      `${GHL_API}/locations/${locationId}/customValues`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
     
-    const location = response.data.locations?.[0];
-    if (!location) {
-      return res.status(400).json({ error: 'Invalid token or no location found' });
-    }
-    
+    // If we get here, the token is valid for this location
     // Store in Supabase
     const { data, error } = await supabase
       .from('locations')
       .upsert({
         user_id: req.user.id,
-        location_id: location.id,
-        location_name: location.name,
+        location_id: locationId,
+        location_name: locationId, // We'll update this if we can get the name
         token: token
       }, {
         onConflict: 'user_id,location_id'
@@ -279,7 +277,7 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
     
   } catch (error) {
     console.error('Token validation error:', error.message);
-    res.status(400).json({ error: 'Invalid token or API error' });
+    res.status(400).json({ error: 'Invalid token or Location ID. Please check both values.' });
   }
 });
 
