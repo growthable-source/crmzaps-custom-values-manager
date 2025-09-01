@@ -507,6 +507,260 @@ app.delete('/api/locations/:locationId/customFields/:fieldId', authenticateUser,
   }
 });
 
+// Wizard endpoints
+// Get all templates for a location
+app.get('/api/locations/:locationId/wizards', authenticateUser, async (req, res) => {
+  const { data, error } = await supabase
+    .from('wizard_templates')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .eq('location_id', req.params.locationId)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch wizards' });
+  }
+  
+  res.json({ wizards: data || [] });
+});
+
+// Create new wizard template
+app.post('/api/locations/:locationId/wizards', authenticateUser, async (req, res) => {
+  const { name, description, fields, branding, settings } = req.body;
+  
+  const { data, error } = await supabase
+    .from('wizard_templates')
+    .insert({
+      user_id: req.user.id,
+      location_id: req.params.locationId,
+      name,
+      description,
+      fields: fields || [],
+      branding: branding || {},
+      settings: settings || {}
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to create wizard' });
+  }
+  
+  res.json(data);
+});
+
+// Update wizard template
+app.put('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
+  const { name, description, fields, branding, settings } = req.body;
+  
+  const { data, error } = await supabase
+    .from('wizard_templates')
+    .update({
+      name,
+      description,
+      fields,
+      branding,
+      settings,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', req.params.wizardId)
+    .eq('user_id', req.user.id)
+    .select()
+    .single();
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to update wizard' });
+  }
+  
+  res.json(data);
+});
+
+// Delete wizard template
+app.delete('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
+  const { error } = await supabase
+    .from('wizard_templates')
+    .delete()
+    .eq('id', req.params.wizardId)
+    .eq('user_id', req.user.id);
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to delete wizard' });
+  }
+  
+  res.json({ success: true });
+});
+
+// Create a session (send wizard to client)
+app.post('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) => {
+  const { client_email, client_name, expires_in_days } = req.body;
+  
+  // Calculate expiry date
+  const expires_at = new Date();
+  expires_at.setDate(expires_at.getDate() + (expires_in_days || 7));
+  
+  const { data, error } = await supabase
+    .from('wizard_sessions')
+    .insert({
+      template_id: req.params.wizardId,
+      client_email,
+      client_name,
+      expires_at: expires_at.toISOString()
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to create session' });
+  }
+  
+  // Generate the client link
+  const clientLink = `${req.protocol}://${req.get('host')}/wizard/${data.access_token}`;
+  
+  res.json({ ...data, client_link: clientLink });
+});
+
+// Get sessions for a wizard
+app.get('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) => {
+  const { data, error } = await supabase
+    .from('wizard_sessions')
+    .select('*')
+    .eq('template_id', req.params.wizardId)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+  
+  res.json({ sessions: data || [] });
+});
+
+// Client-facing endpoints (no auth required, just access token)
+// Get wizard for client
+app.get('/api/client/wizard/:accessToken', async (req, res) => {
+  // Get session
+  const { data: session, error: sessionError } = await supabase
+    .from('wizard_sessions')
+    .select('*, wizard_templates!inner(*)')
+    .eq('access_token', req.params.accessToken)
+    .single();
+  
+  if (sessionError || !session) {
+    return res.status(404).json({ error: 'Invalid or expired wizard link' });
+  }
+  
+  // Check if expired
+  if (new Date(session.expires_at) < new Date()) {
+    return res.status(410).json({ error: 'This wizard has expired' });
+  }
+  
+  res.json(session);
+});
+
+// Submit wizard responses
+app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
+  const { responses } = req.body;
+  
+  // Get session and template
+  const { data: session, error: sessionError } = await supabase
+    .from('wizard_sessions')
+    .select('*, wizard_templates!inner(*)')
+    .eq('access_token', req.params.accessToken)
+    .single();
+  
+  if (sessionError || !session) {
+    return res.status(404).json({ error: 'Invalid session' });
+  }
+  
+  // Update session with responses
+  const { error: updateError } = await supabase
+    .from('wizard_sessions')
+    .update({
+      responses,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      progress: 100
+    })
+    .eq('id', session.id);
+  
+  if (updateError) {
+    return res.status(500).json({ error: 'Failed to save responses' });
+  }
+  
+  // Get the location token to save to GHL
+  const { data: location } = await supabase
+    .from('locations')
+    .select('token')
+    .eq('location_id', session.wizard_templates.location_id)
+    .eq('user_id', session.wizard_templates.user_id)
+    .single();
+  
+  if (location && location.token) {
+    // Save each response to GHL custom values
+    for (const field of session.wizard_templates.fields) {
+      if (responses[field.id] && field.ghl_field) {
+        try {
+          // Check if this custom value already exists
+          const existingValues = await axios.get(
+            `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
+            {
+              headers: {
+                'Authorization': `Bearer ${location.token}`,
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          const existing = existingValues.data.customValues?.find(v => v.name === field.ghl_field);
+          
+          if (existing) {
+            // Update existing
+            await axios.put(
+              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${existing.id}`,
+              { name: field.ghl_field, value: responses[field.id] },
+              {
+                headers: {
+                  'Authorization': `Bearer ${location.token}`,
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+          } else {
+            // Create new
+            await axios.post(
+              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
+              { name: field.ghl_field, value: responses[field.id] },
+              {
+                headers: {
+                  'Authorization': `Bearer ${location.token}`,
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+          }
+        } catch (ghlError) {
+          console.error('Failed to save to GHL:', ghlError.message);
+        }
+      }
+    }
+  }
+  
+  res.json({ success: true, message: 'Wizard completed successfully' });
+});
+
+// Upload file for wizard session
+app.post('/api/client/wizard/:accessToken/upload', async (req, res) => {
+  // This would handle file uploads via multer or similar
+  // For now, we'll assume the file is uploaded directly to Supabase from the client
+  res.json({ message: 'Use client-side Supabase upload' });
+});
+
+// Serve client wizard page
+app.get('/wizard/:accessToken', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'wizard-client.html'));
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
