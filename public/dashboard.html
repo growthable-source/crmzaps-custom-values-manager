@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Location Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --primary-dark: #764ba2;
+            --success: #10b981;
+            --danger: #ef4444;
+            --background: #0a0e27;
+            --surface: #1a1f3a;
+            --surface-light: #242b4d;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--background) 0%, #1e293b 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            display: flex;
+            margin-top: 70px;
+            min-height: calc(100vh - 70px);
+        }
+
+        .locations-sidebar {
+            width: 300px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .location-card {
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .location-card:hover {
+            transform: translateX(5px);
+            border-color: var(--primary);
+        }
+
+        .location-card.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+        }
+
+        .add-location-form {
+            background: var(--surface-light);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .add-location-form input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            margin-bottom: 1rem;
+        }
+
+        .content-area {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 8px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .tab.active {
+            color: var(--primary);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .items-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .item-card {
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .item-value {
+            background: var(--background);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .locations-sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Multi-Location Manager</h1>
+            <div>
+                <span id="userEmail" style="margin-right: 1rem;"></span>
+                <button class="btn btn-danger btn-small" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="locations-sidebar">
+            <h2 style="margin-bottom: 1rem;">Your Locations</h2>
+            
+            <div class="add-location-form">
+                <input type="text" id="newToken" placeholder="Enter Private Integration Token">
+                <button class="btn" style="width: 100%;" onclick="addLocation()">Add Location</button>
+            </div>
+            
+            <div id="locationsList">
+                <div class="empty-state">
+                    <div class="loading"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div id="noLocationSelected" class="content-area">
+                <div class="empty-state">
+                    <h2>Select a Location</h2>
+                    <p style="margin-top: 1rem;">Add a location using your Private Integration token, then select it to manage custom values and fields.</p>
+                </div>
+            </div>
+
+            <div id="locationContent" class="content-area" style="display: none;">
+                <h2 id="selectedLocationName" style="margin-bottom: 2rem;">Location Name</h2>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('values', this)">Custom Values</button>
+                    <button class="tab" onclick="switchTab('fields', this)">Custom Fields</button>
+                </div>
+
+                <div class="tab-content active" id="valuesTab">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+                        <h3>Custom Values</h3>
+                        <button class="btn" onclick="openModal('value')">Add Custom Value</button>
+                    </div>
+                    <div class="items-grid" id="valuesList">
+                        <div class="empty-state">
+                            <div class="loading"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="fieldsTab">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+                        <h3>Custom Fields</h3>
+                        <button class="btn" onclick="openModal('field')">Add Custom Field</button>
+                    </div>
+                    <div class="items-grid" id="fieldsList">
+                        <div class="empty-state">
+                            <div class="loading"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="itemModal">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 id="modalTitle">Add Item</h2>
+                <button onclick="closeModal()" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            <form id="itemForm" onsubmit="saveItem(event)">
+                <div id="modalFields"></div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                    <button type="button" class="btn" style="background: var(--surface-light);" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Get the token from localStorage
+        const token = localStorage.getItem('supabase.auth.token');
+        if (!token) {
+            window.location.href = '/';
+        }
+
+        // Initialize Supabase client with YOUR credentials
+        const { createClient } = supabase;
+        const supabaseClient = createClient(
+            'https://yltdxkkqfnhqpgqtobwu.supabase.co',
+            'sb_publishable_FZ1wTX00v4yJZX05pxgvwA_b_tCCLea'
+        );
+
+        let selectedLocationId = null;
+        let currentItemType = 'value';
+        let editingItemId = null;
+
+        // Load user data and locations on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Get current user
+            const { data: { user } } = await supabaseClient.auth.getUser(token);
+            if (user) {
+                document.getElementById('userEmail').textContent = user.email;
+            }
+            
+            loadLocations();
+        });
+
+        async function loadLocations() {
+            try {
+                const response = await fetch('/api/locations', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    renderLocations(data.locations);
+                } else if (response.status === 401) {
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading locations:', error);
+            }
+        }
+
+        function renderLocations(locations) {
+            const container = document.getElementById('locationsList');
+            
+            if (locations.length === 0) {
+                container.innerHTML = '<div class="empty-state">No locations added yet</div>';
+                return;
+            }
+
+            container.innerHTML = locations.map(loc => `
+                <div class="location-card ${loc.location_id === selectedLocationId ? 'active' : ''}" 
+                     onclick="selectLocation('${loc.location_id}', '${loc.location_name || loc.location_id}')">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600;">${loc.location_name || 'Unnamed Location'}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                ${loc.location_id}
+                            </div>
+                        </div>
+                        <button class="btn btn-danger btn-small" onclick="removeLocation(event, ${loc.id})">×</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addLocation() {
+            const tokenInput = document.getElementById('newToken');
+            const newToken = tokenInput.value.trim();
+            
+            if (!newToken) {
+                alert('Please enter a Private Integration token');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/locations', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: newToken })
+                });
+                
+                if (response.ok) {
+                    tokenInput.value = '';
+                    loadLocations();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to add location');
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+            }
+        }
+
+        async function removeLocation(event, locationId) {
+            event.stopPropagation();
+            
+            if (!confirm('Remove this location?')) return;
+            
+            try {
+                const response = await fetch(`/api/locations/${locationId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    if (selectedLocationId === locationId) {
+                        selectedLocationId = null;
+                        document.getElementById('noLocationSelected').style.display = 'block';
+                        document.getElementById('locationContent').style.display = 'none';
+                    }
+                    loadLocations();
+                }
+            } catch (error) {
+                alert('Error removing location');
+            }
+        }
+
+        function selectLocation(locationId, locationName) {
+            selectedLocationId = locationId;
+            
+            // Update UI
+            document.getElementById('noLocationSelected').style.display = 'none';
+            document.getElementById('locationContent').style.display = 'block';
+            document.getElementById('selectedLocationName').textContent = locationName;
+            
+            // Update active state
+            document.querySelectorAll('.location-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            // Load data for this location
+            loadCustomValues();
+            loadCustomFields();
+        }
+
+        async function loadCustomValues() {
+            if (!selectedLocationId) return;
+            
+            const container = document.getElementById('valuesList');
+            container.innerHTML = '<div class="empty-state"><div class="loading"></div></div>';
+            
+            try {
+                const response = await fetch(`/api/locations/${selectedLocationId}/customValues`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    renderCustomValues(data.customValues || []);
+                }
+            } catch (error) {
+                console.error('Error loading custom values:', error);
+                container.innerHTML = '<div class="empty-state">Error loading custom values</div>';
+            }
+        }
+
+        async function loadCustomFields() {
+            if (!selectedLocationId) return;
+            
+            const container = document.getElementById('fieldsList');
+            container.innerHTML = '<div class="empty-state"><div class="loading"></div></div>';
+            
+            try {
+                const response = await fetch(`/api/locations/${selectedLocationId}/customFields`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    renderCustomFields(data.customFields || []);
+                }
+            } catch (error) {
+                console.error('Error loading custom fields:', error);
+                container.innerHTML = '<div class="empty-state">Error loading custom fields</div>';
+            }
+        }
+
+        function renderCustomValues(values) {
+            const container = document.getElementById('valuesList');
+            
+            if (values.length === 0) {
+                container.innerHTML = '<div class="empty-state">No custom values found. Click "Add Custom Value" to create one.</div>';
+                return;
+            }
+
+            container.innerHTML = values.map(value => `
+                <div class="item-card">
+                    <div class="item-header">
+                        <div style="font-weight: 600;">${value.name}</div>
+                        <div>
+                            <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
+                        </div>
+                    </div>
+                    <div class="item-value">${value.value}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderCustomFields(fields) {
+            const container = document.getElementById('fieldsList');
+            
+            if (fields.length === 0) {
+                container.innerHTML = '<div class="empty-state">No custom fields found. Click "Add Custom Field" to create one.</div>';
+                return;
+            }
+
+            container.innerHTML = fields.map(field => `
+                <div class="item-card">
+                    <div class="item-header">
+                        <div style="font-weight: 600;">${field.name}</div>
+                        <div>
+                            <button class="btn btn-small btn-danger" onclick="deleteItem('field', '${field.id}')">Delete</button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <span style="background: var(--primary); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.875rem;">
+                            ${field.dataType}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function switchTab(tab, button) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            button.classList.add('active');
+            document.getElementById(`${tab}Tab`).classList.add('active');
+        }
+
+        function openModal(type) {
+            if (!selectedLocationId) {
+                alert('Please select a location first');
+                return;
+            }
+            
+            currentItemType = type;
+            editingItemId = null;
+            
+            document.getElementById('modalTitle').textContent = type === 'value' ? 'Add Custom Value' : 'Add Custom Field';
+            
+            if (type === 'value') {
+                document.getElementById('modalFields').innerHTML = `
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="itemName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Value</label>
+                        <textarea class="form-textarea" id="itemValue" required></textarea>
+                    </div>
+                `;
+            } else {
+                document.getElementById('modalFields').innerHTML = `
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="itemName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Data Type</label>
+                        <select class="form-select" id="dataType">
+                            <option value="TEXT">Text</option>
+                            <option value="TEXTAREA">Text Area</option>
+                            <option value="NUMBER">Number</option>
+                            <option value="PHONE">Phone</option>
+                            <option value="EMAIL">Email</option>
+                            <option value="DATE">Date</option>
+                            <option value="CHECKBOX">Checkbox</option>
+                            <option value="SINGLE_OPTIONS">Single Option</option>
+                            <option value="MULTIPLE_OPTIONS">Multiple Options</option>
+                        </select>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('itemModal').classList.add('active');
+        }
+
+        function editValue(value) {
+            currentItemType = 'value';
+            editingItemId = value.id;
+            document.getElementById('modalTitle').textContent = 'Edit Custom Value';
+            document.getElementById('modalFields').innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" id="itemName" value="${value.name}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Value</label>
+                    <textarea class="form-textarea" id="itemValue" required>${value.value}</textarea>
+                </div>
+            `;
+            document.getElementById('itemModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('itemModal').classList.remove('active');
+        }
+
+        async function saveItem(event) {
+            event.preventDefault();
+            
+            const data = { name: document.getElementById('itemName').value };
+            
+            if (currentItemType === 'value') {
+                data.value = document.getElementById('itemValue').value;
+            } else {
+                data.dataType = document.getElementById('dataType').value;
+            }
+            
+            const endpoint = currentItemType === 'value' ? 'customValues' : 'customFields';
+            const method = editingItemId ? 'PUT' : 'POST';
+            const url = editingItemId 
+                ? `/api/locations/${selectedLocationId}/${endpoint}/${editingItemId}`
+                : `/api/locations/${selectedLocationId}/${endpoint}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    closeModal();
+                    currentItemType === 'value' ? loadCustomValues() : loadCustomFields();
+                } else {
+                    alert('Error saving item');
+                }
+            } catch (error) {
+                alert('Network error');
+            }
+        }
+
+        async function deleteItem(type, id) {
+            if (!confirm('Delete this item?')) return;
+            
+            const endpoint = type === 'value' ? 'customValues' : 'customFields';
+            
+            try {
+                const response = await fetch(`/api/locations/${selectedLocationId}/${endpoint}/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    type === 'value' ? loadCustomValues() : loadCustomFields();
+                }
+            } catch (error) {
+                alert('Error deleting item');
+            }
+        }
+
+        async function logout() {
+            await supabaseClient.auth.signOut();
+            localStorage.removeItem('supabase.auth.token');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
