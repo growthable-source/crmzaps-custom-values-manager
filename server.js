@@ -236,16 +236,17 @@ app.get('/api/locations', authenticateUser, async (req, res) => {
 
 // Add a new location
 app.post('/api/locations', authenticateUser, async (req, res) => {
-  const { token, locationId } = req.body;
+  const { token } = req.body;
   
-  if (!token || !locationId) {
-    return res.status(400).json({ error: 'Token and Location ID required' });
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
   }
   
   try {
-    // Test that the token works by trying to fetch custom values
-    const response = await axios.get(
-      `${GHL_API}/locations/${locationId}/customValues`,
+    // First, we need to find the location ID by making a call with the token
+    // We'll use the /oauth/locationInfo endpoint which works with Private Integration tokens
+    const locationResponse = await axios.get(
+      `${GHL_API}/oauth/locationInfo`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -254,14 +255,16 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
       }
     );
     
-    // If we get here, the token is valid for this location
+    const locationId = locationResponse.data.locationId;
+    const locationName = locationResponse.data.name || locationId;
+    
     // Store in Supabase
     const { data, error } = await supabase
       .from('locations')
       .upsert({
         user_id: req.user.id,
         location_id: locationId,
-        location_name: locationId, // We'll update this if we can get the name
+        location_name: locationName,
         token: token
       }, {
         onConflict: 'user_id,location_id'
@@ -277,7 +280,7 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
     
   } catch (error) {
     console.error('Token validation error:', error.message);
-    res.status(400).json({ error: 'Invalid token or Location ID. Please check both values.' });
+    res.status(400).json({ error: 'Invalid Private Integration token' });
   }
 });
 
