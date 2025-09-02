@@ -40,6 +40,85 @@ async function authenticateUser(req, res, next) {
   next();
 }
 
+// FIXED PROFILE ENDPOINTS - Use authenticated Supabase client
+// Replace the profile endpoints in your server.js with these
+
+app.get('/api/profile', authenticateUser, async (req, res) => {
+  try {
+    // Create authenticated client for this user
+    const userSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.authorization
+          }
+        }
+      }
+    );
+    
+    const { data, error } = await userSupabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Profile fetch error:', error);
+      return res.status(500).json({ error: 'Database error: ' + error.message });
+    }
+    
+    res.json(data || { preferred_llm: 'openai' });
+  } catch (error) {
+    console.error('Profile endpoint error:', error);
+    res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+app.post('/api/profile', authenticateUser, async (req, res) => {
+  try {
+    const { preferred_llm, openai_api_key, claude_api_key } = req.body;
+    
+    // Create authenticated client for this user
+    const userSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.authorization
+          }
+        }
+      }
+    );
+    
+    const { data, error } = await userSupabase
+      .from('user_profiles')
+      .upsert({
+        user_id: req.user.id,
+        preferred_llm: preferred_llm || 'openai',
+        openai_api_key: openai_api_key || null,
+        claude_api_key: claude_api_key || null,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Profile save error:', error);
+      return res.status(500).json({ error: 'Failed to save profile: ' + error.message });
+    }
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Profile save exception:', error);
+    res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
 // Serve login page (same as before)
 app.get('/', (req, res) => {
   res.send(`
