@@ -23,21 +23,42 @@ app.use(express.static('public'));
 const GHL_API = 'https://services.leadconnectorhq.com';
 
 // Middleware to verify Supabase auth token
+/ DEBUGGING VERSION - Replace your authenticateUser middleware with this
 async function authenticateUser(req, res, next) {
+  console.log('=== AUTH MIDDLEWARE DEBUG ===');
+  console.log('Authorization header:', req.headers.authorization);
+  
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
+    console.log('ERROR: No token provided in Authorization header');
     return res.status(401).json({ error: 'No token provided' });
   }
 
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid token' });
+  console.log('Token received:', token.substring(0, 20) + '...');
+
+  try {
+    console.log('Validating token with Supabase...');
+    
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error) {
+      console.log('Supabase auth error:', error);
+      return res.status(401).json({ error: 'Token validation failed: ' + error.message });
+    }
+    
+    if (!user) {
+      console.log('No user found for token');
+      return res.status(401).json({ error: 'Invalid token - no user found' });
+    }
+    
+    console.log('User authenticated successfully:', user.id, user.email);
+    req.user = user;
+    next();
+  } catch (error) {
+    console.log('Auth middleware exception:', error);
+    return res.status(401).json({ error: 'Authentication failed: ' + error.message });
   }
-  
-  req.user = user;
-  next();
 }
 
 // FIXED PROFILE ENDPOINTS - Use authenticated Supabase client
