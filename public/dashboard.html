@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Multi-Location Dashboard</title>
+    <title>AI-Powered Multi-Location Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -14,6 +14,7 @@
             --primary-dark: #764ba2;
             --success: #10b981;
             --danger: #ef4444;
+            --warning: #f59e0b;
             --background: #0a0e27;
             --surface: #1a1f3a;
             --surface-light: #242b4d;
@@ -116,6 +117,14 @@
 
         .btn-danger {
             background: var(--danger);
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        .btn-warning {
+            background: var(--warning);
         }
 
         .add-location-form {
@@ -240,7 +249,7 @@
             background: var(--surface);
             border-radius: 12px;
             padding: 2rem;
-            max-width: 600px;
+            max-width: 800px;
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
@@ -271,6 +280,76 @@
             resize: vertical;
         }
 
+        .ai-prompt-section {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .variable-picker {
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .variable-item {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+
+        .variable-item:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .schedule-option {
+            padding: 1rem;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .schedule-option.selected {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .ai-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .ai-status.enabled {
+            background: var(--success);
+            color: white;
+        }
+
+        .ai-status.scheduled {
+            background: var(--warning);
+            color: white;
+        }
+
         .loading {
             display: inline-block;
             width: 20px;
@@ -295,6 +374,10 @@
                 border-right: none;
                 border-bottom: 1px solid var(--border);
             }
+            
+            .schedule-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -302,9 +385,10 @@
 <body>
     <header>
         <div class="header-content">
-            <h1>Multi-Location Manager</h1>
+            <h1>AI-Powered Multi-Location Manager</h1>
             <div>
-                <span id="userEmail" style="margin-right: 1rem;"></span>
+                <button class="btn btn-small" onclick="openProfileSettings()">Settings</button>
+                <span id="userEmail" style="margin: 0 1rem;"></span>
                 <button class="btn btn-danger btn-small" onclick="logout()">Logout</button>
             </div>
         </div>
@@ -330,7 +414,7 @@
             <div id="noLocationSelected" class="content-area">
                 <div class="empty-state">
                     <h2>Select a Location</h2>
-                    <p style="margin-top: 1rem;">Add a location using your Private Integration token, then select it to manage custom values and fields.</p>
+                    <p style="margin-top: 1rem;">Add a location using your Private Integration token, then select it to manage custom values with AI automation.</p>
                 </div>
             </div>
 
@@ -341,6 +425,7 @@
                     <button class="tab active" onclick="switchTab('values', this)">Custom Values</button>
                     <button class="tab" onclick="switchTab('fields', this)">Custom Fields</button>
                     <button class="tab" onclick="switchTab('wizards', this)">Client Wizards</button>
+                    <button class="tab" onclick="switchTab('automation', this)">AI Automation</button>
                 </div>
 
                 <div class="tab-content active" id="valuesTab">
@@ -349,30 +434,9 @@
                         <div style="display: flex; gap: 1rem; align-items: center;">
                             <button class="btn btn-small" onclick="openFolderModal()">New Folder</button>
                             <button class="btn" onclick="openModal('value')">Add Custom Value</button>
+                            <button class="btn btn-success" onclick="openAIValueModal()">AI Generate</button>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
-                        <select class="form-input" style="width: 150px; padding: 0.5rem;" onchange="filterByType(this.value)">
-                            <option value="all">All Types</option>
-                            <option value="text">Text</option>
-                            <option value="image">Images</option>
-                            <option value="url">URLs</option>
-                        </select>
-                        
-                        <select class="form-input" style="width: 150px; padding: 0.5rem;" onchange="sortValues(this.value)">
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="name">Name (A-Z)</option>
-                        </select>
-                        
-                        <select class="form-input" style="width: 200px; padding: 0.5rem;" id="folderFilter" onchange="filterByFolder(this.value)">
-                            <option value="all">All Folders</option>
-                            <option value="uncategorized">Uncategorized</option>
-                        </select>
-                    </div>
-                    
-                    <div id="foldersContainer" style="margin-bottom: 2rem;"></div>
                     
                     <div class="items-grid" id="valuesList">
                         <div class="empty-state">
@@ -392,11 +456,58 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="tab-content" id="automationTab">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+                        <h3>AI Automation</h3>
+                        <button class="btn btn-warning" onclick="openScheduleModal()">Schedule AI Prompt</button>
+                    </div>
+                    <div class="items-grid" id="automationList">
+                        <div class="empty-state">
+                            <div class="loading"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Profile Settings Modal -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Profile Settings</h2>
+                <button onclick="closeProfileModal()" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Preferred AI Provider</label>
+                <select class="form-input" id="preferredLLM">
+                    <option value="openai">OpenAI (GPT-4)</option>
+                    <option value="claude">Claude (Anthropic)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">OpenAI API Key</label>
+                <input type="password" class="form-input" id="openaiKey" placeholder="sk-...">
+                <small style="color: var(--text-secondary);">Your API key is encrypted and stored securely</small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Claude API Key</label>
+                <input type="password" class="form-input" id="claudeKey" placeholder="sk-ant-...">
+                <small style="color: var(--text-secondary);">Your API key is encrypted and stored securely</small>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn" style="background: var(--surface-light);" onclick="closeProfileModal()">Cancel</button>
+                <button class="btn" onclick="saveProfile()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Regular Value Modal -->
     <div class="modal" id="itemModal">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -413,9 +524,119 @@
         </div>
     </div>
 
-    <!-- Wizard Builder Modal -->
+    <!-- AI Value Creation Modal -->
+    <div class="modal" id="aiValueModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>AI-Generated Custom Value</h2>
+                <button onclick="closeAIValueModal()" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Custom Value Name</label>
+                <input type="text" class="form-input" id="aiValueName" placeholder="e.g., company_description">
+            </div>
+            
+            <div class="ai-prompt-section">
+                <div class="form-group">
+                    <label class="form-label">AI Prompt</label>
+                    <textarea class="form-textarea" id="aiPrompt" placeholder="Write a professional company description for {company_name} in the {industry} industry..." style="min-height: 120px;"></textarea>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <button type="button" class="btn btn-small" onclick="toggleVariablePicker()">Insert Variable</button>
+                    <button type="button" class="btn btn-small btn-success" onclick="testAIPrompt()">Test Prompt</button>
+                </div>
+                
+                <div id="variablePicker" style="display: none;" class="variable-picker">
+                    <div style="padding: 0.5rem; background: var(--surface); border-bottom: 1px solid var(--border); font-weight: 600;">
+                        Click to insert variable:
+                    </div>
+                    <div id="variableList"></div>
+                </div>
+            </div>
+            
+            <div id="aiTestResult" style="display: none; background: var(--surface-light); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;">AI Generated:</h4>
+                <div id="aiTestOutput" style="font-family: monospace; white-space: pre-wrap;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn" style="background: var(--surface-light);" onclick="closeAIValueModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveAIValue()">Save AI Value</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Modal -->
+    <div class="modal" id="scheduleModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Schedule AI Prompt</h2>
+                <button onclick="closeScheduleModal()" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Custom Value to Update</label>
+                <select class="form-input" id="scheduleCustomValue">
+                    <option value="">Select custom value...</option>
+                </select>
+            </div>
+            
+            <div class="ai-prompt-section">
+                <div class="form-group">
+                    <label class="form-label">AI Prompt</label>
+                    <textarea class="form-textarea" id="schedulePrompt" placeholder="Generate daily market insights for {company_name}..." style="min-height: 120px;"></textarea>
+                </div>
+                
+                <button type="button" class="btn btn-small" onclick="toggleScheduleVariablePicker()">Insert Variable</button>
+                
+                <div id="scheduleVariablePicker" style="display: none;" class="variable-picker">
+                    <div style="padding: 0.5rem; background: var(--surface); border-bottom: 1px solid var(--border); font-weight: 600;">
+                        Click to insert variable:
+                    </div>
+                    <div id="scheduleVariableList"></div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Schedule Type</label>
+                <div class="schedule-grid">
+                    <div class="schedule-option" onclick="selectSchedule('daily')">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📅</div>
+                        <div style="font-weight: 600;">Daily</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Every day</div>
+                    </div>
+                    <div class="schedule-option" onclick="selectSchedule('weekly')">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                        <div style="font-weight: 600;">Weekly</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Every Monday</div>
+                    </div>
+                    <div class="schedule-option" onclick="selectSchedule('monthly')">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📈</div>
+                        <div style="font-weight: 600;">Monthly</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">1st of month</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="scheduleTimeSettings" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Run Time</label>
+                    <input type="time" class="form-input" id="scheduleTime" value="09:00">
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn" style="background: var(--surface-light);" onclick="closeScheduleModal()">Cancel</button>
+                <button class="btn btn-warning" onclick="saveSchedule()">Schedule Automation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wizard Builder Modal - Enhanced -->
     <div class="modal" id="wizardBuilderModal">
-        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content" style="max-width: 1000px; max-height: 90vh; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h2>Wizard Builder</h2>
                 <button onclick="closeWizardBuilder()" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">×</button>
@@ -519,7 +740,9 @@
         let wizardFields = [];
         let editingWizardId = null;
         let sendingWizardId = null;
-        let existingCustomValues = []; // NEW: Store existing values for wizard building
+        let existingCustomValues = [];
+        let userProfile = null;
+        let selectedScheduleType = null;
 
         // Load user data and locations on page load
         window.addEventListener('DOMContentLoaded', async () => {
@@ -527,11 +750,278 @@
             const { data: { user } } = await supabaseClient.auth.getUser(token);
             if (user) {
                 document.getElementById('userEmail').textContent = user.email;
+                await loadUserProfile(user.id);
             }
             
             loadLocations();
         });
 
+        // NEW: Load user profile with API keys
+        async function loadUserProfile(userId) {
+            try {
+                const response = await fetch('/api/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    userProfile = await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // NEW: Profile management
+        async function openProfileSettings() {
+            if (userProfile) {
+                document.getElementById('preferredLLM').value = userProfile.preferred_llm || 'openai';
+                document.getElementById('openaiKey').value = userProfile.openai_api_key || '';
+                document.getElementById('claudeKey').value = userProfile.claude_api_key || '';
+            }
+            document.getElementById('profileModal').classList.add('active');
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profileModal').classList.remove('active');
+        }
+
+        async function saveProfile() {
+            const profileData = {
+                preferred_llm: document.getElementById('preferredLLM').value,
+                openai_api_key: document.getElementById('openaiKey').value,
+                claude_api_key: document.getElementById('claudeKey').value
+            };
+
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(profileData)
+                });
+
+                if (response.ok) {
+                    userProfile = await response.json();
+                    closeProfileModal();
+                    alert('Profile saved successfully!');
+                } else {
+                    alert('Error saving profile');
+                }
+            } catch (error) {
+                alert('Network error saving profile');
+            }
+        }
+
+        // NEW: AI Value Creation
+        async function openAIValueModal() {
+            if (!userProfile || (!userProfile.openai_api_key && !userProfile.claude_api_key)) {
+                alert('Please configure your AI API keys in Settings first');
+                return;
+            }
+            
+            await loadExistingCustomValuesForVariables();
+            renderVariableList();
+            document.getElementById('aiValueModal').classList.add('active');
+        }
+
+        function closeAIValueModal() {
+            document.getElementById('aiValueModal').classList.remove('active');
+            document.getElementById('aiTestResult').style.display = 'none';
+        }
+
+        function toggleVariablePicker() {
+            const picker = document.getElementById('variablePicker');
+            picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function renderVariableList() {
+            const container = document.getElementById('variableList');
+            container.innerHTML = existingCustomValues.map(cv => `
+                <div class="variable-item" onclick="insertVariable('${cv.name}')">
+                    <strong>{${cv.name}}</strong> - ${cv.value ? cv.value.substring(0, 40) + '...' : 'No value'}
+                </div>
+            `).join('');
+        }
+
+        function insertVariable(variableName) {
+            const promptInput = document.getElementById('aiPrompt');
+            const cursorPos = promptInput.selectionStart;
+            const textBefore = promptInput.value.substring(0, cursorPos);
+            const textAfter = promptInput.value.substring(cursorPos);
+            promptInput.value = textBefore + `{${variableName}}` + textAfter;
+            promptInput.focus();
+            promptInput.setSelectionRange(cursorPos + variableName.length + 2, cursorPos + variableName.length + 2);
+            document.getElementById('variablePicker').style.display = 'none';
+        }
+
+        async function testAIPrompt() {
+            const prompt = document.getElementById('aiPrompt').value;
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/ai/test-prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        location_id: selectedLocationId
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('aiTestOutput').textContent = result.generated_text;
+                    document.getElementById('aiTestResult').style.display = 'block';
+                } else {
+                    alert('Error testing prompt');
+                }
+            } catch (error) {
+                alert('Network error testing prompt');
+            }
+        }
+
+        async function saveAIValue() {
+            const name = document.getElementById('aiValueName').value;
+            const prompt = document.getElementById('aiPrompt').value;
+
+            if (!name || !prompt) {
+                alert('Please enter both name and prompt');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/ai/generate-value', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        prompt,
+                        location_id: selectedLocationId
+                    })
+                });
+
+                if (response.ok) {
+                    closeAIValueModal();
+                    loadCustomValues();
+                    alert('AI-generated custom value created!');
+                } else {
+                    alert('Error creating AI value');
+                }
+            } catch (error) {
+                alert('Network error creating AI value');
+            }
+        }
+
+        // NEW: Scheduling functions
+        async function openScheduleModal() {
+            if (!userProfile || (!userProfile.openai_api_key && !userProfile.claude_api_key)) {
+                alert('Please configure your AI API keys in Settings first');
+                return;
+            }
+            
+            // Populate custom values dropdown
+            const select = document.getElementById('scheduleCustomValue');
+            select.innerHTML = '<option value="">Select custom value...</option>' +
+                existingCustomValues.map(cv => `<option value="${cv.id}" data-name="${cv.name}">${cv.name}</option>`).join('');
+            
+            await loadExistingCustomValuesForVariables();
+            renderScheduleVariableList();
+            document.getElementById('scheduleModal').classList.add('active');
+        }
+
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').classList.remove('active');
+            selectedScheduleType = null;
+            document.querySelectorAll('.schedule-option').forEach(opt => opt.classList.remove('selected'));
+        }
+
+        function selectSchedule(type) {
+            selectedScheduleType = type;
+            document.querySelectorAll('.schedule-option').forEach(opt => opt.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            document.getElementById('scheduleTimeSettings').style.display = 'block';
+        }
+
+        function toggleScheduleVariablePicker() {
+            const picker = document.getElementById('scheduleVariablePicker');
+            picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function renderScheduleVariableList() {
+            const container = document.getElementById('scheduleVariableList');
+            container.innerHTML = existingCustomValues.map(cv => `
+                <div class="variable-item" onclick="insertScheduleVariable('${cv.name}')">
+                    <strong>{${cv.name}}</strong> - ${cv.value ? cv.value.substring(0, 40) + '...' : 'No value'}
+                </div>
+            `).join('');
+        }
+
+        function insertScheduleVariable(variableName) {
+            const promptInput = document.getElementById('schedulePrompt');
+            const cursorPos = promptInput.selectionStart;
+            const textBefore = promptInput.value.substring(0, cursorPos);
+            const textAfter = promptInput.value.substring(cursorPos);
+            promptInput.value = textBefore + `{${variableName}}` + textAfter;
+            promptInput.focus();
+            promptInput.setSelectionRange(cursorPos + variableName.length + 2, cursorPos + variableName.length + 2);
+            document.getElementById('scheduleVariablePicker').style.display = 'none';
+        }
+
+        async function saveSchedule() {
+            const customValueSelect = document.getElementById('scheduleCustomValue');
+            const customValueId = customValueSelect.value;
+            const customValueName = customValueSelect.options[customValueSelect.selectedIndex]?.dataset.name;
+            const prompt = document.getElementById('schedulePrompt').value;
+            const scheduleTime = document.getElementById('scheduleTime').value;
+
+            if (!customValueId || !prompt || !selectedScheduleType) {
+                alert('Please fill in all fields and select a schedule type');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/schedule/create', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        location_id: selectedLocationId,
+                        custom_value_id: customValueId,
+                        custom_value_name: customValueName,
+                        prompt_template: prompt,
+                        schedule_type: selectedScheduleType,
+                        schedule_time: scheduleTime
+                    })
+                });
+
+                if (response.ok) {
+                    closeScheduleModal();
+                    loadAutomations();
+                    alert('AI automation scheduled successfully!');
+                } else {
+                    alert('Error creating schedule');
+                }
+            } catch (error) {
+                alert('Network error creating schedule');
+            }
+        }
+
+        // Load existing functions...
         async function loadLocations() {
             try {
                 const response = await fetch('/api/locations', {
@@ -575,7 +1065,6 @@
             `).join('');
         }
 
-        // ENHANCED: Load existing custom values when location is selected
         async function selectLocation(locationId, locationName) {
             selectedLocationId = locationId;
             
@@ -592,15 +1081,12 @@
             
             // Load data for this location
             loadCustomValues();
-            loadCustomFields();
             loadWizards();
-            
-            // NEW: Load existing custom values for wizard building
-            await loadExistingCustomValuesForWizard();
+            loadAutomations();
+            await loadExistingCustomValuesForVariables();
         }
 
-        // NEW: Function to load existing custom values for wizard building
-        async function loadExistingCustomValuesForWizard() {
+        async function loadExistingCustomValuesForVariables() {
             if (!selectedLocationId) return;
             
             try {
@@ -615,65 +1101,8 @@
                     existingCustomValues = data.customValues || [];
                 }
             } catch (error) {
-                console.error('Error loading custom values for wizard:', error);
+                console.error('Error loading custom values for variables:', error);
                 existingCustomValues = [];
-            }
-        }
-
-        async function addLocation() {
-            const tokenInput = document.getElementById('newToken');
-            const newToken = tokenInput.value.trim();
-            
-            if (!newToken) {
-                alert('Please enter a Private Integration token');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/locations', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ token: newToken })
-                });
-                
-                if (response.ok) {
-                    tokenInput.value = '';
-                    loadLocations();
-                } else {
-                    const error = await response.json();
-                    alert(error.error || 'Failed to add location');
-                }
-            } catch (error) {
-                alert('Network error. Please try again.');
-            }
-        }
-
-        async function removeLocation(event, locationId) {
-            event.stopPropagation();
-            
-            if (!confirm('Remove this location?')) return;
-            
-            try {
-                const response = await fetch(`/api/locations/${locationId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    if (selectedLocationId === locationId) {
-                        selectedLocationId = null;
-                        document.getElementById('noLocationSelected').style.display = 'block';
-                        document.getElementById('locationContent').style.display = 'none';
-                    }
-                    loadLocations();
-                }
-            } catch (error) {
-                alert('Error removing location');
             }
         }
 
@@ -693,210 +1122,140 @@
                 if (response.ok) {
                     const data = await response.json();
                     allCustomValues = data.customValues || [];
-                    
-                    // Add metadata to values
-                    allCustomValues = allCustomValues.map((value, index) => {
-                        // Detect type from value
-                        let type = 'text';
-                        if (value.value && (
-                            value.value.includes('supabase') || 
-                            value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
-                            (value.value.startsWith('https://') && value.value.includes('image'))
-                        )) {
-                            type = 'image';
-                        } else if (value.value && value.value.startsWith('http')) {
-                            type = 'url';
-                        }
-                        
-                        // Extract folder from name if it contains [folder] prefix
-                        let folder = '';
-                        let displayName = value.name;
-                        const folderMatch = value.name.match(/^\[([^\]]+)\]\s*(.+)/);
-                        if (folderMatch) {
-                            folder = folderMatch[1];
-                            displayName = folderMatch[2];
-                            
-                            // Add to folders list if not already there
-                            if (!folders.includes(folder)) {
-                                folders.push(folder);
-                                updateFolderFilter();
-                            }
-                        }
-                        
-                        return {
-                            ...value,
-                            type,
-                            folder,
-                            displayName,
-                            createdIndex: allCustomValues.length - index // Simulate creation order
-                        };
-                    });
-                    
-                    applyFiltersAndSort();
+                    existingCustomValues = [...allCustomValues]; // Update for variables
+                    renderCustomValues(allCustomValues);
                 }
             } catch (error) {
                 console.error('Error loading custom values:', error);
                 container.innerHTML = '<div class="empty-state">Error loading custom values</div>';
             }
         }
-        
-        function applyFiltersAndSort() {
-            let filtered = [...allCustomValues];
-            
-            // Apply type filter
-            if (currentFilter !== 'all') {
-                filtered = filtered.filter(v => v.type === currentFilter);
-            }
-            
-            // Apply folder filter
-            if (currentFolder === 'uncategorized') {
-                filtered = filtered.filter(v => !v.folder);
-            } else if (currentFolder !== 'all') {
-                filtered = filtered.filter(v => v.folder === currentFolder);
-            }
-            
-            // Apply sorting
-            switch(currentSort) {
-                case 'newest':
-                    filtered.sort((a, b) => a.createdIndex - b.createdIndex);
-                    break;
-                case 'oldest':
-                    filtered.sort((a, b) => b.createdIndex - a.createdIndex);
-                    break;
-                case 'name':
-                    filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
-                    break;
-            }
-            
-            renderCustomValues(filtered);
-        }
-        
-        function filterByType(type) {
-            currentFilter = type;
-            applyFiltersAndSort();
-        }
-        
-        function sortValues(sortType) {
-            currentSort = sortType;
-            applyFiltersAndSort();
-        }
-        
-        function filterByFolder(folder) {
-            currentFolder = folder;
-            applyFiltersAndSort();
-        }
-        
-        function updateFolderFilter() {
-            const select = document.getElementById('folderFilter');
-            if (select) {
-                const currentValue = select.value;
-                select.innerHTML = `
-                    <option value="all">All Folders</option>
-                    <option value="uncategorized">Uncategorized</option>
-                    ${folders.map(f => `<option value="${f}">${f}</option>`).join('')}
-                `;
-                select.value = currentValue;
-            }
-        }
-        
-        function openFolderModal() {
-            const folderName = prompt('Enter new folder name:');
-            if (folderName && !folders.includes(folderName)) {
-                folders.push(folderName);
-                updateFolderFilter();
-                alert(`Folder "${folderName}" created! Select it when creating new values.`);
-            }
-        }
-
-        async function loadCustomFields() {
-            // Existing function - no changes needed
-        }
 
         function renderCustomValues(values) {
             const container = document.getElementById('valuesList');
             
             if (values.length === 0) {
-                container.innerHTML = '<div class="empty-state">No custom values found. Click "Add Custom Value" to create one.</div>';
+                container.innerHTML = '<div class="empty-state">No custom values found. Click "Add Custom Value" or "AI Generate" to create one.</div>';
                 return;
             }
 
-            // Group by folders
-            const grouped = {};
-            const uncategorized = [];
-            
-            values.forEach(value => {
-                if (value.folder) {
-                    if (!grouped[value.folder]) {
-                        grouped[value.folder] = [];
-                    }
-                    grouped[value.folder].push(value);
-                } else {
-                    uncategorized.push(value);
-                }
-            });
-            
-            let html = '';
-            
-            // Render by folders if viewing all folders
-            if (currentFolder === 'all' && Object.keys(grouped).length > 0) {
-                // Render folders
-                Object.keys(grouped).sort().forEach(folder => {
-                    html += `
-                        <div style="margin-bottom: 2rem;">
-                            <h4 style="color: var(--primary); margin-bottom: 1rem;">📁 ${folder}</h4>
-                            <div class="items-grid">
-                                ${grouped[folder].map(value => renderSingleValue(value)).join('')}
+            container.innerHTML = values.map(value => {
+                const hasAI = value.prompt_template;
+                const isScheduled = value.is_scheduled;
+                
+                return `
+                    <div class="item-card">
+                        <div class="item-header">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-weight: 600;">${value.name}</span>
+                                ${hasAI ? '<span class="ai-status enabled">AI</span>' : ''}
+                                ${isScheduled ? '<span class="ai-status scheduled">SCHEDULED</span>' : ''}
+                            </div>
+                            <div>
+                                <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
                             </div>
                         </div>
-                    `;
+                        <div class="item-value">${value.value || 'No value set'}</div>
+                        ${hasAI ? `<div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(102, 126, 234, 0.1); border-radius: 6px; font-size: 0.875rem;">Prompt: ${value.prompt_template.substring(0, 80)}...</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadAutomations() {
+            if (!selectedLocationId) return;
+            
+            const container = document.getElementById('automationList');
+            container.innerHTML = '<div class="empty-state"><div class="loading"></div></div>';
+            
+            try {
+                const response = await fetch(`/api/schedule/list/${selectedLocationId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 
-                // Render uncategorized
-                if (uncategorized.length > 0) {
-                    html += `
-                        <div style="margin-bottom: 2rem;">
-                            <h4 style="color: var(--text-secondary); margin-bottom: 1rem;">📋 Uncategorized</h4>
-                            <div class="items-grid">
-                                ${uncategorized.map(value => renderSingleValue(value)).join('')}
-                            </div>
-                        </div>
-                    `;
+                if (response.ok) {
+                    const data = await response.json();
+                    renderAutomations(data.schedules || []);
                 }
-            } else {
-                // Render flat list
-                html = values.map(value => renderSingleValue(value)).join('');
+            } catch (error) {
+                console.error('Error loading automations:', error);
+                container.innerHTML = '<div class="empty-state">Error loading automations</div>';
             }
-            
-            container.innerHTML = html;
         }
-        
-        function renderSingleValue(value) {
-            const typeIcon = value.type === 'image' ? '🖼️' : value.type === 'url' ? '🔗' : '📝';
+
+        function renderAutomations(schedules) {
+            const container = document.getElementById('automationList');
             
-            return `
+            if (schedules.length === 0) {
+                container.innerHTML = '<div class="empty-state">No AI automations scheduled yet. Click "Schedule AI Prompt" to create one.</div>';
+                return;
+            }
+
+            container.innerHTML = schedules.map(schedule => `
                 <div class="item-card">
                     <div class="item-header">
                         <div>
-                            <span style="margin-right: 0.5rem;">${typeIcon}</span>
-                            <span style="font-weight: 600;">${value.displayName || value.name}</span>
+                            <div style="font-weight: 600;">${schedule.custom_value_name}</div>
+                            <div style="color: var(--text-secondary); margin-top: 0.25rem;">
+                                ${schedule.schedule_type} at ${schedule.schedule_time}
+                                ${schedule.is_active ? '' : ' (PAUSED)'}
+                            </div>
                         </div>
                         <div>
-                            <button class="btn btn-small" onclick='editValue(${JSON.stringify(value).replace(/'/g, "&apos;")})'>Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteItem('value', '${value.id}')">Delete</button>
+                            <button class="btn btn-small ${schedule.is_active ? 'btn-warning' : 'btn-success'}" onclick="toggleSchedule('${schedule.id}', ${!schedule.is_active})">${schedule.is_active ? 'Pause' : 'Resume'}</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteSchedule('${schedule.id}')">Delete</button>
                         </div>
                     </div>
-                    <div class="item-value">
-                        ${value.type === 'image'
-                            ? `<img src="${value.value}" style="max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; object-fit: cover;" alt="${value.name}">
-                               <div style="margin-top: 0.5rem; font-size: 0.875rem; word-break: break-all; color: var(--text-secondary);">${value.value}</div>`
-                            : value.type === 'url'
-                            ? `<a href="${value.value}" target="_blank" style="color: var(--primary); text-decoration: none;">🔗 ${value.value}</a>`
-                            : value.value
-                        }
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: var(--background); border-radius: 6px; font-family: monospace; font-size: 0.875rem;">
+                        ${schedule.prompt_template}
                     </div>
-                    ${value.folder ? `<div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">📁 ${value.folder}</div>` : ''}
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        Last run: ${schedule.last_run_at ? new Date(schedule.last_run_at).toLocaleString() : 'Never'}
+                        | Next run: ${schedule.next_run_at ? new Date(schedule.next_run_at).toLocaleString() : 'Not scheduled'}
+                    </div>
                 </div>
-            `;
+            `).join('');
+        }
+
+        async function toggleSchedule(scheduleId, isActive) {
+            try {
+                const response = await fetch(`/api/schedule/${scheduleId}/toggle`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_active: isActive })
+                });
+
+                if (response.ok) {
+                    loadAutomations();
+                }
+            } catch (error) {
+                alert('Error updating schedule');
+            }
+        }
+
+        async function deleteSchedule(scheduleId) {
+            if (!confirm('Delete this automation?')) return;
+
+            try {
+                const response = await fetch(`/api/schedule/${scheduleId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    loadAutomations();
+                }
+            } catch (error) {
+                alert('Error deleting schedule');
+            }
         }
 
         function switchTab(tab, button) {
@@ -905,321 +1264,20 @@
             
             button.classList.add('active');
             document.getElementById(`${tab}Tab`).classList.add('active');
-        }
-
-        function openModal(type) {
-            if (!selectedLocationId) {
-                alert('Please select a location first');
-                return;
-            }
             
-            currentItemType = type;
-            editingItemId = null;
-            
-            document.getElementById('modalTitle').textContent = type === 'value' ? 'Add Custom Value' : 'Add Custom Field';
-            
-            if (type === 'value') {
-                // Get folder options
-                const folderOptions = folders.map(f => 
-                    `<option value="${f}">${f}</option>`
-                ).join('');
-                
-                document.getElementById('modalFields').innerHTML = `
-                    <div class="form-group">
-                        <label class="form-label">Name</label>
-                        <input type="text" class="form-input" id="itemName" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Folder</label>
-                        <select class="form-input" id="valueFolder">
-                            <option value="">Uncategorized</option>
-                            ${folderOptions}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Value Type</label>
-                        <select class="form-input" id="valueType" onchange="toggleValueInput()">
-                            <option value="text">Text</option>
-                            <option value="image">Image</option>
-                            <option value="url">URL</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="textValueGroup">
-                        <label class="form-label">Value</label>
-                        <textarea class="form-textarea" id="itemValue"></textarea>
-                    </div>
-                    <div class="form-group" id="imageValueGroup" style="display: none;">
-                        <label class="form-label">Upload Image</label>
-                        <input type="file" class="form-input" id="imageFile" accept="image/*">
-                        <small style="color: var(--text-secondary);">Image will be uploaded and URL will be stored as value</small>
-                    </div>
-                `;
-            }
-            
-            document.getElementById('itemModal').classList.add('active');
-        }
-
-        function toggleValueInput() {
-            const valueType = document.getElementById('valueType').value;
-            const textGroup = document.getElementById('textValueGroup');
-            const imageGroup = document.getElementById('imageValueGroup');
-            
-            if (valueType === 'image') {
-                textGroup.style.display = 'none';
-                imageGroup.style.display = 'block';
-            } else {
-                textGroup.style.display = 'block';
-                imageGroup.style.display = 'none';
+            if (tab === 'automation') {
+                loadAutomations();
             }
         }
 
-        function editValue(value) {
-            currentItemType = 'value';
-            editingItemId = value.id;
-            document.getElementById('modalTitle').textContent = 'Edit Custom Value';
-            
-            // Extract folder and actual name
-            let folder = '';
-            let actualName = value.name;
-            const folderMatch = value.name.match(/^\[([^\]]+)\]\s*(.+)/);
-            if (folderMatch) {
-                folder = folderMatch[1];
-                actualName = folderMatch[2];
-            }
-            
-            // Get folder options
-            const folderOptions = folders.map(f => 
-                `<option value="${f}" ${f === folder ? 'selected' : ''}>${f}</option>`
-            ).join('');
-            
-            // Detect value type
-            let valueType = 'text';
-            if (value.value && (
-                value.value.includes('supabase') || 
-                value.value.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
-                (value.value.startsWith('https://') && value.value.includes('image'))
-            )) {
-                valueType = 'image';
-            } else if (value.value && value.value.startsWith('http')) {
-                valueType = 'url';
-            }
-            
-            document.getElementById('modalFields').innerHTML = `
-                <div class="form-group">
-                    <label class="form-label">Name</label>
-                    <input type="text" class="form-input" id="itemName" value="${actualName}" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Folder</label>
-                    <select class="form-input" id="valueFolder">
-                        <option value="" ${!folder ? 'selected' : ''}>Uncategorized</option>
-                        ${folderOptions}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Value Type</label>
-                    <select class="form-input" id="valueType" value="${valueType}" onchange="toggleValueInput()">
-                        <option value="text" ${valueType === 'text' ? 'selected' : ''}>Text</option>
-                        <option value="image" ${valueType === 'image' ? 'selected' : ''}>Image</option>
-                        <option value="url" ${valueType === 'url' ? 'selected' : ''}>URL</option>
-                    </select>
-                </div>
-                <div class="form-group" id="textValueGroup" style="${valueType === 'image' ? 'display: none;' : ''}">
-                    <label class="form-label">Value</label>
-                    <textarea class="form-textarea" id="itemValue">${value.value}</textarea>
-                </div>
-                <div class="form-group" id="imageValueGroup" style="${valueType === 'image' ? '' : 'display: none;'}">
-                    <label class="form-label">Current Image</label>
-                    <img src="${value.value}" style="max-width: 100%; max-height: 200px; border-radius: 6px;">
-                    <label class="form-label" style="margin-top: 1rem;">Replace Image (optional)</label>
-                    <input type="file" class="form-input" id="imageFile" accept="image/*">
-                </div>
-            `;
-            document.getElementById('itemModal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('itemModal').classList.remove('active');
-        }
-
-        async function saveItem(event) {
-            event.preventDefault();
-            
-            try {
-                const data = { name: document.getElementById('itemName').value };
-                
-                if (currentItemType === 'value') {
-                    const valueType = document.getElementById('valueType')?.value || 'text';
-                    const folder = document.getElementById('valueFolder')?.value;
-                    
-                    // Add folder prefix to name if folder is selected
-                    if (folder) {
-                        data.name = `[${folder}] ${data.name}`;
-                    }
-                    
-                    if (valueType === 'image') {
-                        const fileInput = document.getElementById('imageFile');
-                        const file = fileInput.files[0];
-                        
-                        if (!file) {
-                            alert('Please select an image');
-                            return;
-                        }
-                        
-                        console.log('Uploading image:', file.name);
-                        
-                        // Upload image to Supabase Storage
-                        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-                        const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                            .from('custom-value-images')
-                            .upload(fileName, file, {
-                                cacheControl: '3600',
-                                upsert: false
-                            });
-                        
-                        if (uploadError) {
-                            console.error('Upload error:', uploadError);
-                            alert('Failed to upload image: ' + uploadError.message);
-                            return;
-                        }
-                        
-                        // Get public URL
-                        const { data: urlData } = supabaseClient.storage
-                            .from('custom-value-images')
-                            .getPublicUrl(fileName);
-                        
-                        console.log('Image URL:', urlData.publicUrl);
-                        data.value = urlData.publicUrl;
-                    } else {
-                        const textValue = document.getElementById('itemValue').value;
-                        if (!textValue) {
-                            alert('Please enter a value');
-                            return;
-                        }
-                        data.value = textValue;
-                    }
-                }
-                
-                const endpoint = currentItemType === 'value' ? 'customValues' : 'customFields';
-                const method = editingItemId ? 'PUT' : 'POST';
-                const url = editingItemId 
-                    ? `/api/locations/${selectedLocationId}/${endpoint}/${editingItemId}`
-                    : `/api/locations/${selectedLocationId}/${endpoint}`;
-                
-                console.log('Saving:', data);
-                
-                const response = await fetch(url, {
-                    method,
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-                
-                if (response.ok) {
-                    closeModal();
-                    currentItemType === 'value' ? loadCustomValues() : loadCustomFields();
-                } else {
-                    const error = await response.json();
-                    alert('Error saving item: ' + (error.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Save error:', error);
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function deleteItem(type, id) {
-            if (!confirm('Delete this item?')) return;
-            
-            const endpoint = type === 'value' ? 'customValues' : 'customFields';
-            
-            try {
-                const response = await fetch(`/api/locations/${selectedLocationId}/${endpoint}/${id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    type === 'value' ? loadCustomValues() : loadCustomFields();
-                }
-            } catch (error) {
-                alert('Error deleting item');
-            }
-        }
-
-        async function logout() {
-            await supabaseClient.auth.signOut();
-            localStorage.removeItem('supabase.auth.token');
-            window.location.href = '/';
-        }
-
-        // Wizard Management Functions
-        async function loadWizards() {
-            if (!selectedLocationId) return;
-            
-            const container = document.getElementById('wizardsList');
-            container.innerHTML = '<div class="empty-state"><div class="loading"></div></div>';
-            
-            try {
-                const response = await fetch(`/api/locations/${selectedLocationId}/wizards`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    renderWizards(data.wizards || []);
-                }
-            } catch (error) {
-                console.error('Error loading wizards:', error);
-                container.innerHTML = '<div class="empty-state">Error loading wizards</div>';
-            }
-        }
-
-        function renderWizards(wizards) {
-            const container = document.getElementById('wizardsList');
-            
-            if (wizards.length === 0) {
-                container.innerHTML = '<div class="empty-state">No wizards created yet. Click "Create New Wizard" to get started.</div>';
-                return;
-            }
-
-            container.innerHTML = wizards.map(wizard => `
-                <div class="item-card">
-                    <div class="item-header">
-                        <div>
-                            <div style="font-weight: 600; font-size: 1.125rem;">${wizard.name}</div>
-                            <div style="color: var(--text-secondary); margin-top: 0.25rem;">${wizard.description || 'No description'}</div>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-small" onclick="viewWizardSessions('${wizard.id}')">Sessions</button>
-                            <button class="btn btn-small" onclick="openSendWizardModal('${wizard.id}')">Send</button>
-                            <button class="btn btn-small" onclick="editWizard('${wizard.id}')">Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteWizard('${wizard.id}')">Delete</button>
-                        </div>
-                    </div>
-                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                        <span style="color: var(--text-secondary);">Fields: ${wizard.fields?.length || 0}</span>
-                        <span style="margin-left: 2rem; color: var(--text-secondary);">Created: ${new Date(wizard.created_at).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // ENHANCED: Wizard builder with existing custom values support
+        // Enhanced wizard builder functions
         async function openWizardBuilder() {
             if (!selectedLocationId) {
                 alert('Please select a location first');
                 return;
             }
             
-            // Make sure we have the latest custom values
-            await loadExistingCustomValuesForWizard();
+            await loadExistingCustomValuesForVariables();
             
             editingWizardId = null;
             wizardFields = [];
@@ -1235,7 +1293,6 @@
             document.getElementById('wizardBuilderModal').classList.remove('active');
         }
 
-        // ENHANCED: Add wizard field with custom value mode
         function addWizardField() {
             const fieldId = 'field_' + Date.now();
             wizardFields.push({
@@ -1244,15 +1301,14 @@
                 label: '',
                 placeholder: '',
                 required: false,
-                customValueMode: 'create', // NEW: 'create' or 'existing'
-                ghl_field: '', // For new custom values
-                existing_custom_value_id: '', // NEW: For existing custom values
-                existing_custom_value_name: '' // NEW: For display
+                customValueMode: 'create',
+                ghl_field: '',
+                existing_custom_value_id: '',
+                existing_custom_value_name: ''
             });
             renderWizardFields();
         }
 
-        // ENHANCED: Render wizard fields with custom value options
         function renderWizardFields() {
             const container = document.getElementById('wizardFields');
             
@@ -1349,15 +1405,13 @@
         function updateFieldProp(index, prop, value) {
             wizardFields[index][prop] = value;
             if (prop === 'type') {
-                renderWizardFields(); // Re-render to show/hide options for select
+                renderWizardFields();
             }
         }
 
-        // NEW: Handle custom value mode changes
         function updateCustomValueMode(fieldIndex, mode) {
             wizardFields[fieldIndex].customValueMode = mode;
             
-            // Clear the opposite mode's data when switching
             if (mode === 'create') {
                 wizardFields[fieldIndex].existing_custom_value_id = '';
                 wizardFields[fieldIndex].existing_custom_value_name = '';
@@ -1368,7 +1422,6 @@
             renderWizardFields();
         }
 
-        // NEW: Handle selecting an existing custom value
         function selectExistingCustomValue(fieldIndex, customValueId) {
             const selectedValue = existingCustomValues.find(cv => cv.id === customValueId);
             
@@ -1376,7 +1429,6 @@
                 wizardFields[fieldIndex].existing_custom_value_id = customValueId;
                 wizardFields[fieldIndex].existing_custom_value_name = selectedValue.name;
                 
-                // Auto-fill the label if it's empty
                 if (!wizardFields[fieldIndex].label) {
                     wizardFields[fieldIndex].label = selectedValue.name.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 }
@@ -1393,7 +1445,6 @@
             renderWizardFields();
         }
 
-        // ENHANCED: Save wizard with validation for both modes
         async function saveWizard() {
             const name = document.getElementById('wizardName').value;
             const description = document.getElementById('wizardDescription').value;
@@ -1419,7 +1470,6 @@
                     return;
                 }
                 
-                // Check custom value configuration
                 if (field.customValueMode === 'create') {
                     if (!field.ghl_field) {
                         alert(`Please enter a custom value name for field "${field.label}" or switch to "Use Existing"`);
@@ -1468,6 +1518,90 @@
                 console.error('Error saving wizard:', error);
                 alert('Network error while saving wizard');
             }
+        }
+
+        // Existing functions for location management, modals, etc.
+        async function addLocation() {
+            const tokenInput = document.getElementById('newToken');
+            const newToken = tokenInput.value.trim();
+            
+            if (!newToken) {
+                alert('Please enter a Private Integration token');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/locations', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: newToken })
+                });
+                
+                if (response.ok) {
+                    tokenInput.value = '';
+                    loadLocations();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to add location');
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+            }
+        }
+
+        async function loadWizards() {
+            if (!selectedLocationId) return;
+            
+            const container = document.getElementById('wizardsList');
+            container.innerHTML = '<div class="empty-state"><div class="loading"></div></div>';
+            
+            try {
+                const response = await fetch(`/api/locations/${selectedLocationId}/wizards`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    renderWizards(data.wizards || []);
+                }
+            } catch (error) {
+                console.error('Error loading wizards:', error);
+                container.innerHTML = '<div class="empty-state">Error loading wizards</div>';
+            }
+        }
+
+        function renderWizards(wizards) {
+            const container = document.getElementById('wizardsList');
+            
+            if (wizards.length === 0) {
+                container.innerHTML = '<div class="empty-state">No wizards created yet. Click "Create New Wizard" to get started.</div>';
+                return;
+            }
+
+            container.innerHTML = wizards.map(wizard => `
+                <div class="item-card">
+                    <div class="item-header">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.125rem;">${wizard.name}</div>
+                            <div style="color: var(--text-secondary); margin-top: 0.25rem;">${wizard.description || 'No description'}</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-small" onclick="viewWizardSessions('${wizard.id}')">Sessions</button>
+                            <button class="btn btn-small" onclick="openSendWizardModal('${wizard.id}')">Send</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteWizard('${wizard.id}')">Delete</button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <span style="color: var(--text-secondary);">Fields: ${wizard.fields?.length || 0}</span>
+                        <span style="margin-left: 2rem; color: var(--text-secondary);">Created: ${new Date(wizard.created_at).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            `).join('');
         }
 
         function openSendWizardModal(wizardId) {
@@ -1526,29 +1660,6 @@
             alert('Link copied to clipboard!');
         }
 
-        async function viewWizardSessions(wizardId) {
-            try {
-                const response = await fetch(`/api/wizards/${wizardId}/sessions`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    showSessionsModal(data.sessions);
-                }
-            } catch (error) {
-                alert('Error loading sessions');
-            }
-        }
-
-        function showSessionsModal(sessions) {
-            const completed = sessions.filter(s => s.status === 'completed').length;
-            const pending = sessions.filter(s => s.status === 'pending').length;
-            alert(`Total Sessions: ${sessions.length}\nCompleted: ${completed}\nPending: ${pending}`);
-        }
-
         async function deleteWizard(wizardId) {
             if (!confirm('Are you sure you want to delete this wizard?')) return;
 
@@ -1568,8 +1679,27 @@
             }
         }
 
-        async function editWizard(wizardId) {
-            alert('Edit functionality coming soon');
+        // Utility functions
+        function openModal(type) {
+            alert('Use "AI Generate" for smarter custom value creation!');
+        }
+
+        function closeModal() {
+            document.getElementById('itemModal').classList.remove('active');
+        }
+
+        function openFolderModal() {
+            const folderName = prompt('Enter new folder name:');
+            if (folderName && !folders.includes(folderName)) {
+                folders.push(folderName);
+                alert(`Folder "${folderName}" created!`);
+            }
+        }
+
+        async function logout() {
+            await supabaseClient.auth.signOut();
+            localStorage.removeItem('supabase.auth.token');
+            window.location.href = '/';
         }
     </script>
 </body>
