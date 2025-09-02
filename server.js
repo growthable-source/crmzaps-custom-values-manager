@@ -688,7 +688,7 @@ cron.schedule('*/5 * * * *', async () => { // Check every 5 minutes
   }
 });
 
-// REPLACE your entire custom values GET endpoint with this debugging version
+// CORRECTED - Complete custom values GET endpoint with async keyword
 app.get('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
   console.log('=== CUSTOM VALUES DEBUG ===');
   console.log('User ID:', req.user.id);
@@ -697,7 +697,6 @@ app.get('/api/locations/:locationId/customValues', authenticateUser, async (req,
   try {
     console.log('Looking up location token in database...');
     
-    // Get the token for this location
     const { data: location, error } = await supabase
       .from('locations')
       .select('token')
@@ -716,9 +715,7 @@ app.get('/api/locations/:locationId/customValues', authenticateUser, async (req,
     }
     
     console.log('Found location token:', location.token.substring(0, 20) + '...');
-    
     console.log('Making call to GoHighLevel API...');
-    console.log('API URL:', `${GHL_API}/locations/${req.params.locationId}/customValues`);
     
     const response = await axios.get(
       `${GHL_API}/locations/${req.params.locationId}/customValues`,
@@ -731,7 +728,7 @@ app.get('/api/locations/:locationId/customValues', authenticateUser, async (req,
     );
     
     console.log('GHL API Response Status:', response.status);
-    console.log('GHL API Response Data:', JSON.stringify(response.data).substring(0, 200) + '...');
+    console.log('GHL API Response Data keys:', Object.keys(response.data));
     
     res.json(response.data);
   } catch (error) {
@@ -739,46 +736,11 @@ app.get('/api/locations/:locationId/customValues', authenticateUser, async (req,
     console.log('Error message:', error.message);
     console.log('Error response status:', error.response?.status);
     console.log('Error response data:', error.response?.data);
-    console.log('Full error object:', JSON.stringify({
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    }, null, 2));
     
     res.status(500).json({ 
       error: 'Failed to fetch custom values: ' + error.message,
       details: error.response?.data || 'No additional details'
     });
-  }
-});
-    
-    const locationId = locationResponse.data.locationId;
-    const locationName = locationResponse.data.name || locationId;
-    
-    // Store in Supabase
-    const { data, error } = await supabase
-      .from('locations')
-      .upsert({
-        user_id: req.user.id,
-        location_id: locationId,
-        location_name: locationName,
-        token: token
-      }, {
-        onConflict: 'user_id,location_id'
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      return res.status(500).json({ error: 'Failed to save location' });
-    }
-    
-    res.json({ success: true, location: data });
-    
-  } catch (error) {
-    console.error('Token validation error:', error.message);
-    res.status(400).json({ error: 'Invalid Private Integration token' });
   }
 });
 
