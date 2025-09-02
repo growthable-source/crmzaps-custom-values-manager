@@ -657,7 +657,7 @@ app.get('/api/client/wizard/:accessToken', async (req, res) => {
   res.json(session);
 });
 
-// Submit wizard responses
+// ENHANCED: Submit wizard responses - handles both new and existing custom values
 app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
   const { responses } = req.body;
   
@@ -696,28 +696,18 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
     .single();
   
   if (location && location.token) {
-    // Save each response to GHL custom values
+    // Process each field based on whether it's creating new or using existing custom values
     for (const field of session.wizard_templates.fields) {
-      if (responses[field.id] && field.ghl_field) {
+      if (responses[field.id]) {
         try {
-          // Check if this custom value already exists
-          const existingValues = await axios.get(
-            `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
-            {
-              headers: {
-                'Authorization': `Bearer ${location.token}`,
-                'Version': '2021-07-28'
-              }
-            }
-          );
-          
-          const existing = existingValues.data.customValues?.find(v => v.name === field.ghl_field);
-          
-          if (existing) {
-            // Update existing
+          if (field.customValueMode === 'existing' && field.existing_custom_value_id) {
+            // UPDATE existing custom value
             await axios.put(
-              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${existing.id}`,
-              { name: field.ghl_field, value: responses[field.id] },
+              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${field.existing_custom_value_id}`,
+              { 
+                name: field.existing_custom_value_name, 
+                value: responses[field.id] 
+              },
               {
                 headers: {
                   'Authorization': `Bearer ${location.token}`,
@@ -726,22 +716,57 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
                 }
               }
             );
-          } else {
-            // Create new
-            await axios.post(
+            console.log(`Updated existing custom value: ${field.existing_custom_value_name}`);
+            
+          } else if (field.customValueMode === 'create' && field.ghl_field) {
+            // CREATE new custom value or update if it exists
+            
+            // Check if this custom value already exists
+            const existingValues = await axios.get(
               `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
-              { name: field.ghl_field, value: responses[field.id] },
               {
                 headers: {
                   'Authorization': `Bearer ${location.token}`,
-                  'Version': '2021-07-28',
-                  'Content-Type': 'application/json'
+                  'Version': '2021-07-28'
                 }
               }
             );
+            
+            const existing = existingValues.data.customValues?.find(v => v.name === field.ghl_field);
+            
+            if (existing) {
+              // Update existing
+              await axios.put(
+                `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${existing.id}`,
+                { name: field.ghl_field, value: responses[field.id] },
+                {
+                  headers: {
+                    'Authorization': `Bearer ${location.token}`,
+                    'Version': '2021-07-28',
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+              console.log(`Updated existing custom value: ${field.ghl_field}`);
+            } else {
+              // Create new
+              await axios.post(
+                `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
+                { name: field.ghl_field, value: responses[field.id] },
+                {
+                  headers: {
+                    'Authorization': `Bearer ${location.token}`,
+                    'Version': '2021-07-28',
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+              console.log(`Created new custom value: ${field.ghl_field}`);
+            }
           }
         } catch (ghlError) {
-          console.error('Failed to save to GHL:', ghlError.message);
+          console.error(`Failed to save custom value for field ${field.id}:`, ghlError.message);
+          // Continue processing other fields even if one fails
         }
       }
     }
@@ -760,6 +785,11 @@ app.post('/api/client/wizard/:accessToken/upload', async (req, res) => {
 // Serve client wizard page
 app.get('/wizard/:accessToken', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'wizard-client.html'));
+});
+
+// Serve dashboard page
+app.get('/dashboard.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 // Start server
