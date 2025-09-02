@@ -682,6 +682,7 @@ app.get('/api/locations', authenticateUser, async (req, res) => {
   res.json({ locations: data || [] });
 });
 
+// Replace your current location POST endpoint with your original working version
 app.post('/api/locations', authenticateUser, async (req, res) => {
   const { token } = req.body;
   
@@ -690,6 +691,8 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
   }
   
   try {
+    // First, we need to find the location ID by making a call with the token
+    // We'll use the /oauth/locationInfo endpoint which works with Private Integration tokens
     const locationResponse = await axios.get(
       `${GHL_API}/oauth/locationInfo`,
       {
@@ -703,6 +706,7 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
     const locationId = locationResponse.data.locationId;
     const locationName = locationResponse.data.name || locationId;
     
+    // Store in Supabase
     const { data, error } = await supabase
       .from('locations')
       .upsert({
