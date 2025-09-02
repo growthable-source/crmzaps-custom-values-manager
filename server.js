@@ -753,18 +753,32 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
   }
 });
 
+// DEBUGGING VERSION - Replace your DELETE location endpoint with this
 app.delete('/api/locations/:id', authenticateUser, async (req, res) => {
-  const { error } = await supabase
-    .from('locations')
-    .delete()
-    .eq('id', req.params.id)
-    .eq('user_id', req.user.id);
+  console.log('=== DELETE LOCATION DEBUG ===');
+  console.log('User ID:', req.user.id);
+  console.log('Location ID to delete:', req.params.id);
   
-  if (error) {
-    return res.status(500).json({ error: 'Failed to delete location' });
+  try {
+    console.log('Attempting to delete from Supabase...');
+    
+    const { error } = await supabase
+      .from('locations')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id);
+    
+    if (error) {
+      console.log('Supabase delete error:', error);
+      return res.status(500).json({ error: 'Failed to delete location: ' + error.message });
+    }
+    
+    console.log('Location deleted successfully');
+    res.json({ success: true });
+  } catch (error) {
+    console.log('Delete endpoint exception:', error);
+    res.status(500).json({ error: 'Server error: ' + error.message });
   }
-  
-  res.json({ success: true });
 });
 
 app.get('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
