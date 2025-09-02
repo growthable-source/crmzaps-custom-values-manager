@@ -416,45 +416,47 @@
             document.getElementById('progressBar').style.width = progress + '%';
         }
 
-        async function handleFileUpload(fieldId, input) {
-            const file = input.files[0];
-            if (!file) return;
-            
-            // Show preview for images
-            const field = wizardData.fields.find(f => f.id === fieldId);
-            if (field.type === 'image') {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById(fieldId + '_preview').innerHTML = 
-                        `<img src="${e.target.result}" alt="Preview">`;
-                };
-                reader.readAsDataURL(file);
-            }
-            
-            // Upload to Supabase
-            try {
-                const fileName = `${accessToken}/${fieldId}_${Date.now()}_${file.name}`;
-                const { data, error } = await supabaseClient.storage
-                    .from('wizard-uploads')
-                    .upload(fileName, file);
-                
-                if (error) throw error;
-                
-                // Get public URL
-                const { data: urlData } = supabaseClient.storage
-                    .from('wizard-uploads')
-                    .getPublicUrl(fileName);
-                
-                // Save URL as response
-                responses[fieldId] = urlData.publicUrl;
-                updateProgress();
-                
-            } catch (error) {
-                console.error('Upload error:', error);
-                alert('Failed to upload file. Please try again.');
-            }
-        }
-
+   async function handleFileUpload(fieldId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    // Show preview for images
+    const field = wizardData.fields.find(f => f.id === fieldId);
+    if (field.type === 'image') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById(fieldId + '_preview').innerHTML = 
+                `<img src="${e.target.result}" alt="Preview">`;
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    // Upload to Supabase
+    try {
+        // Sanitize filename - remove spaces and special characters
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${accessToken}/${fieldId}_${Date.now()}_${sanitizedName}`;
+        
+        const { data, error } = await supabaseClient.storage
+            .from('wizard-uploads')
+            .upload(fileName, file);
+        
+        if (error) throw error;
+        
+        // Get public URL
+        const { data: urlData } = supabaseClient.storage
+            .from('wizard-uploads')
+            .getPublicUrl(fileName);
+        
+        // Save URL as response
+        responses[fieldId] = urlData.publicUrl;
+        updateProgress();
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Failed to upload file. Please try again.');
+    }
+}
         async function saveProgress() {
             // Save responses to session (would need an endpoint for this)
             alert('Progress saved! You can return to this wizard using the same link.');
