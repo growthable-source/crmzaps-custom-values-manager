@@ -688,41 +688,70 @@ cron.schedule('*/5 * * * *', async () => { // Check every 5 minutes
   }
 });
 
-// Existing endpoints (locations, custom values, wizards, etc.)
-app.get('/api/locations', authenticateUser, async (req, res) => {
-  const { data, error } = await supabase
-    .from('locations')
-    .select('*')
-    .eq('user_id', req.user.id)
-    .order('created_at', { ascending: false });
-  
-  if (error) {
-    return res.status(500).json({ error: 'Failed to fetch locations' });
-  }
-  
-  res.json({ locations: data || [] });
-});
-
-// Replace your current location POST endpoint with your original working version
-app.post('/api/locations', authenticateUser, async (req, res) => {
-  const { token } = req.body;
-  
-  if (!token) {
-    return res.status(400).json({ error: 'Token required' });
-  }
+// REPLACE your entire custom values GET endpoint with this debugging version
+app.get('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
+  console.log('=== CUSTOM VALUES DEBUG ===');
+  console.log('User ID:', req.user.id);
+  console.log('Location ID:', req.params.locationId);
   
   try {
-    // First, we need to find the location ID by making a call with the token
-    // We'll use the /oauth/locationInfo endpoint which works with Private Integration tokens
-    const locationResponse = await axios.get(
-      `${GHL_API}/oauth/locationInfo`,
+    console.log('Looking up location token in database...');
+    
+    // Get the token for this location
+    const { data: location, error } = await supabase
+      .from('locations')
+      .select('token')
+      .eq('location_id', req.params.locationId)
+      .eq('user_id', req.user.id)
+      .single();
+    
+    if (error) {
+      console.log('Database error finding location:', error);
+      return res.status(404).json({ error: 'Location not found: ' + error.message });
+    }
+    
+    if (!location) {
+      console.log('No location found with ID:', req.params.locationId);
+      return res.status(404).json({ error: 'Location not found' });
+    }
+    
+    console.log('Found location token:', location.token.substring(0, 20) + '...');
+    
+    console.log('Making call to GoHighLevel API...');
+    console.log('API URL:', `${GHL_API}/locations/${req.params.locationId}/customValues`);
+    
+    const response = await axios.get(
+      `${GHL_API}/locations/${req.params.locationId}/customValues`,
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${location.token}`,
           'Version': '2021-07-28'
         }
       }
     );
+    
+    console.log('GHL API Response Status:', response.status);
+    console.log('GHL API Response Data:', JSON.stringify(response.data).substring(0, 200) + '...');
+    
+    res.json(response.data);
+  } catch (error) {
+    console.log('=== CUSTOM VALUES ERROR ===');
+    console.log('Error message:', error.message);
+    console.log('Error response status:', error.response?.status);
+    console.log('Error response data:', error.response?.data);
+    console.log('Full error object:', JSON.stringify({
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    }, null, 2));
+    
+    res.status(500).json({ 
+      error: 'Failed to fetch custom values: ' + error.message,
+      details: error.response?.data || 'No additional details'
+    });
+  }
+});
     
     const locationId = locationResponse.data.locationId;
     const locationName = locationResponse.data.name || locationId;
