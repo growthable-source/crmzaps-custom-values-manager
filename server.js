@@ -23,7 +23,7 @@ app.use(express.static('public'));
 const GHL_API = 'https://services.leadconnectorhq.com';
 
 // Middleware to verify Supabase auth token
-/ DEBUGGING VERSION - Replace your authenticateUser middleware with this
+// DEBUGGING VERSION - Replace your authenticateUser middleware with this
 async function authenticateUser(req, res, next) {
   console.log('=== AUTH MIDDLEWARE DEBUG ===');
   console.log('Authorization header:', req.headers.authorization);
