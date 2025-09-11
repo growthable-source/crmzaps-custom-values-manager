@@ -3,7 +3,6 @@ const axios = require('axios');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path'); 
-const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
@@ -23,130 +22,30 @@ app.use(express.static('public'));
 const GHL_API = 'https://services.leadconnectorhq.com';
 
 // Middleware to verify Supabase auth token
-// DEBUGGING VERSION - Replace your authenticateUser middleware with this
 async function authenticateUser(req, res, next) {
-  console.log('=== AUTH MIDDLEWARE DEBUG ===');
-  console.log('Authorization header:', req.headers.authorization);
-  
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
-    console.log('ERROR: No token provided in Authorization header');
     return res.status(401).json({ error: 'No token provided' });
   }
 
-  console.log('Token received:', token.substring(0, 20) + '...');
-
-  try {
-    console.log('Validating token with Supabase...');
-    
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error) {
-      console.log('Supabase auth error:', error);
-      return res.status(401).json({ error: 'Token validation failed: ' + error.message });
-    }
-    
-    if (!user) {
-      console.log('No user found for token');
-      return res.status(401).json({ error: 'Invalid token - no user found' });
-    }
-    
-    console.log('User authenticated successfully:', user.id, user.email);
-    req.user = user;
-    next();
-  } catch (error) {
-    console.log('Auth middleware exception:', error);
-    return res.status(401).json({ error: 'Authentication failed: ' + error.message });
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    return res.status(401).json({ error: 'Invalid token' });
   }
+  
+  req.user = user;
+  next();
 }
 
-// FIXED PROFILE ENDPOINTS - Use authenticated Supabase client
-// Replace the profile endpoints in your server.js with these
-
-app.get('/api/profile', authenticateUser, async (req, res) => {
-  try {
-    // Create authenticated client for this user
-    const userSupabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: req.headers.authorization
-          }
-        }
-      }
-    );
-    
-    const { data, error } = await userSupabase
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') {
-      console.error('Profile fetch error:', error);
-      return res.status(500).json({ error: 'Database error: ' + error.message });
-    }
-    
-    res.json(data || { preferred_llm: 'openai' });
-  } catch (error) {
-    console.error('Profile endpoint error:', error);
-    res.status(500).json({ error: 'Server error: ' + error.message });
-  }
-});
-
-app.post('/api/profile', authenticateUser, async (req, res) => {
-  try {
-    const { preferred_llm, openai_api_key, claude_api_key } = req.body;
-    
-    // Create authenticated client for this user
-    const userSupabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: req.headers.authorization
-          }
-        }
-      }
-    );
-    
-    const { data, error } = await userSupabase
-      .from('user_profiles')
-      .upsert({
-        user_id: req.user.id,
-        preferred_llm: preferred_llm || 'openai',
-        openai_api_key: openai_api_key || null,
-        claude_api_key: claude_api_key || null,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Profile save error:', error);
-      return res.status(500).json({ error: 'Failed to save profile: ' + error.message });
-    }
-    
-    res.json(data);
-  } catch (error) {
-    console.error('Profile save exception:', error);
-    res.status(500).json({ error: 'Server error: ' + error.message });
-  }
-});
-
-// Serve login page (same as before)
+// Serve login page
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI-Powered Custom Values Manager</title>
+    <title>Custom Values Manager</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -233,7 +132,7 @@ app.get('/', (req, res) => {
 <body>
     <div class="container">
         <div class="card">
-            <h1 id="formTitle">AI-Powered Manager</h1>
+            <h1 id="formTitle">Login</h1>
             
             <form id="authForm">
                 <div class="form-group">
@@ -269,7 +168,7 @@ app.get('/', (req, res) => {
         
         function toggleForm() {
             isLogin = !isLogin;
-            document.getElementById('formTitle').textContent = isLogin ? 'AI-Powered Manager' : 'Create Account';
+            document.getElementById('formTitle').textContent = isLogin ? 'Login' : 'Sign Up';
             document.getElementById('submitBtn').textContent = isLogin ? 'Login' : 'Sign Up';
             document.getElementById('toggleText').textContent = isLogin ? "Don't have an account?" : "Already have an account?";
             document.querySelector('.toggle-link a').textContent = isLogin ? 'Sign Up' : 'Login';
@@ -295,6 +194,7 @@ app.get('/', (req, res) => {
                     
                     if (error) throw error;
                     
+                    // Store the session token
                     localStorage.setItem('supabase.auth.token', data.session.access_token);
                     window.location.href = '/dashboard.html';
                 } else {
@@ -305,7 +205,7 @@ app.get('/', (req, res) => {
                     
                     if (error) throw error;
                     
-                    successDiv.textContent = 'Account created! Check email to verify, then login.';
+                    successDiv.textContent = 'Account created! Please check your email to verify, then login.';
                     successDiv.style.display = 'block';
                     toggleForm();
                 }
@@ -320,459 +220,89 @@ app.get('/', (req, res) => {
   `);
 });
 
-// NEW: Profile management endpoints
-app.get('/api/profile', authenticateUser, async (req, res) => {
+// Get user's locations
+app.get('/api/locations', authenticateUser, async (req, res) => {
   const { data, error } = await supabase
-    .from('user_profiles')
+    .from('locations')
     .select('*')
     .eq('user_id', req.user.id)
-    .single();
-  
-  if (error && error.code !== 'PGRST116') { // Not found is ok
-    return res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-  
-  res.json(data || {});
-});
-
-app.post('/api/profile', authenticateUser, async (req, res) => {
-  const { preferred_llm, openai_api_key, claude_api_key } = req.body;
-  
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .upsert({
-      user_id: req.user.id,
-      preferred_llm,
-      openai_api_key,
-      claude_api_key,
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'user_id'
-    })
-    .select()
-    .single();
-  
-  if (error) {
-    return res.status(500).json({ error: 'Failed to save profile' });
-  }
-  
-  res.json(data);
-});
-
-// NEW: AI integration endpoints
-app.post('/api/ai/test-prompt', authenticateUser, async (req, res) => {
-  const { prompt, location_id } = req.body;
-  
-  try {
-    const result = await generateWithAI(req.user.id, prompt, location_id);
-    res.json({ generated_text: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/ai/generate-value', authenticateUser, async (req, res) => {
-  const { name, prompt, location_id } = req.body;
-  
-  try {
-    // Generate the value with AI
-    const generatedValue = await generateWithAI(req.user.id, prompt, location_id);
-    
-    // Get location token
-    const { data: location } = await supabase
-      .from('locations')
-      .select('token')
-      .eq('location_id', location_id)
-      .eq('user_id', req.user.id)
-      .single();
-    
-    if (!location) {
-      return res.status(404).json({ error: 'Location not found' });
-    }
-    
-    // Create custom value in GHL
-    const response = await axios.post(
-      `${GHL_API}/locations/${location_id}/customValues`,
-      { name, value: generatedValue },
-      {
-        headers: {
-          'Authorization': `Bearer ${location.token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    res.json(response.data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// NEW: Scheduling endpoints
-app.post('/api/schedule/create', authenticateUser, async (req, res) => {
-  const { location_id, custom_value_id, custom_value_name, prompt_template, schedule_type, schedule_time } = req.body;
-  
-  // Calculate next run time
-  const nextRun = calculateNextRun(schedule_type, schedule_time);
-  
-  const { data, error } = await supabase
-    .from('scheduled_prompts')
-    .insert({
-      user_id: req.user.id,
-      location_id,
-      custom_value_id,
-      custom_value_name,
-      prompt_template,
-      schedule_type,
-      schedule_time,
-      next_run_at: nextRun.toISOString()
-    })
-    .select()
-    .single();
-  
-  if (error) {
-    return res.status(500).json({ error: 'Failed to create schedule' });
-  }
-  
-  res.json(data);
-});
-
-app.get('/api/schedule/list/:locationId', authenticateUser, async (req, res) => {
-  const { data, error } = await supabase
-    .from('scheduled_prompts')
-    .select('*')
-    .eq('user_id', req.user.id)
-    .eq('location_id', req.params.locationId)
     .order('created_at', { ascending: false });
   
   if (error) {
-    return res.status(500).json({ error: 'Failed to fetch schedules' });
+    return res.status(500).json({ error: 'Failed to fetch locations' });
   }
   
-  res.json({ schedules: data || [] });
+  res.json({ locations: data || [] });
 });
 
-app.put('/api/schedule/:scheduleId/toggle', authenticateUser, async (req, res) => {
-  const { is_active } = req.body;
+// Add a new location
+app.post('/api/locations', authenticateUser, async (req, res) => {
+  const { token } = req.body;
   
-  const { error } = await supabase
-    .from('scheduled_prompts')
-    .update({ is_active, updated_at: new Date().toISOString() })
-    .eq('id', req.params.scheduleId)
-    .eq('user_id', req.user.id);
-  
-  if (error) {
-    return res.status(500).json({ error: 'Failed to update schedule' });
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
   }
-  
-  res.json({ success: true });
-});
-
-app.delete('/api/schedule/:scheduleId', authenticateUser, async (req, res) => {
-  const { error } = await supabase
-    .from('scheduled_prompts')
-    .delete()
-    .eq('id', req.params.scheduleId)
-    .eq('user_id', req.user.id);
-  
-  if (error) {
-    return res.status(500).json({ error: 'Failed to delete schedule' });
-  }
-  
-  res.json({ success: true });
-});
-
-// NEW: AI helper functions
-async function generateWithAI(userId, prompt, locationId) {
-  // Get user profile for API keys
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-  
-  if (!profile) {
-    throw new Error('No AI API keys configured. Please add them in Settings.');
-  }
-  
-  // Replace variables in prompt
-  const processedPrompt = await replaceVariables(prompt, userId, locationId);
-  
-  // Generate with preferred AI
-  if (profile.preferred_llm === 'claude' && profile.claude_api_key) {
-    return await generateWithClaude(profile.claude_api_key, processedPrompt);
-  } else if (profile.openai_api_key) {
-    return await generateWithOpenAI(profile.openai_api_key, processedPrompt);
-  } else {
-    throw new Error('No API keys configured for your preferred AI provider');
-  }
-}
-
-async function generateWithOpenAI(apiKey, prompt) {
-  try {
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant that generates professional content for businesses. Keep responses concise and relevant.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    return response.data.choices[0].message.content.trim();
-  } catch (error) {
-    throw new Error('OpenAI API error: ' + error.message);
-  }
-}
-
-async function generateWithClaude(apiKey, prompt) {
-  try {
-    const response = await axios.post('https://api.anthropic.com/v1/messages', {
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 500,
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    }, {
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01'
-      }
-    });
-    
-    return response.data.content[0].text.trim();
-  } catch (error) {
-    throw new Error('Claude API error: ' + error.message);
-  }
-}
-
-async function replaceVariables(prompt, userId, locationId) {
-  // Get all custom values for this location
-  const { data: location } = await supabase
-    .from('locations')
-    .select('token')
-    .eq('location_id', locationId)
-    .eq('user_id', userId)
-    .single();
-  
-  if (!location) return prompt;
   
   try {
-    const response = await axios.get(
-      `${GHL_API}/locations/${locationId}/customValues`,
+    // First, we need to find the location ID by making a call with the token
+    // We'll use the /oauth/locationInfo endpoint which works with Private Integration tokens
+    const locationResponse = await axios.get(
+      `${GHL_API}/oauth/locationInfo`,
       {
         headers: {
-          'Authorization': `Bearer ${location.token}`,
+          'Authorization': `Bearer ${token}`,
           'Version': '2021-07-28'
         }
       }
     );
     
-    const customValues = response.data.customValues || [];
-    let processedPrompt = prompt;
+    const locationId = locationResponse.data.locationId;
+    const locationName = locationResponse.data.name || locationId;
     
-    // Replace {variable_name} with actual values
-    customValues.forEach(cv => {
-      const variablePattern = new RegExp(`\\{${cv.name}\\}`, 'g');
-      processedPrompt = processedPrompt.replace(variablePattern, cv.value || '');
-    });
-    
-    return processedPrompt;
-  } catch (error) {
-    console.error('Error replacing variables:', error);
-    return prompt; // Return original if replacement fails
-  }
-}
-
-function calculateNextRun(scheduleType, scheduleTime) {
-  const now = new Date();
-  const [hours, minutes] = scheduleTime.split(':').map(Number);
-  
-  let nextRun = new Date();
-  nextRun.setHours(hours, minutes, 0, 0);
-  
-  switch (scheduleType) {
-    case 'daily':
-      if (nextRun <= now) {
-        nextRun.setDate(nextRun.getDate() + 1);
-      }
-      break;
-    case 'weekly':
-      // Set to next Monday
-      const daysUntilMonday = (8 - nextRun.getDay()) % 7 || 7;
-      nextRun.setDate(nextRun.getDate() + daysUntilMonday);
-      if (nextRun <= now) {
-        nextRun.setDate(nextRun.getDate() + 7);
-      }
-      break;
-    case 'monthly':
-      // Set to 1st of next month
-      nextRun.setDate(1);
-      nextRun.setMonth(nextRun.getMonth() + 1);
-      break;
-  }
-  
-  return nextRun;
-}
-
-// NEW: Cron job for running scheduled prompts
-cron.schedule('*/5 * * * *', async () => { // Check every 5 minutes
-  console.log('Checking for scheduled prompts to run...');
-  
-  try {
-    const { data: schedules } = await supabase
-      .from('scheduled_prompts')
-      .select('*')
-      .eq('is_active', true)
-      .lte('next_run_at', new Date().toISOString());
-    
-    for (const schedule of schedules || []) {
-      try {
-        console.log(`Running scheduled prompt for ${schedule.custom_value_name}`);
-        
-        // Generate new value
-        const generatedValue = await generateWithAI(
-          schedule.user_id, 
-          schedule.prompt_template, 
-          schedule.location_id
-        );
-        
-        // Get location token
-        const { data: location } = await supabase
-          .from('locations')
-          .select('token')
-          .eq('location_id', schedule.location_id)
-          .eq('user_id', schedule.user_id)
-          .single();
-        
-        if (location) {
-          // Update custom value in GHL
-          await axios.put(
-            `${GHL_API}/locations/${schedule.location_id}/customValues/${schedule.custom_value_id}`,
-            { name: schedule.custom_value_name, value: generatedValue },
-            {
-              headers: {
-                'Authorization': `Bearer ${location.token}`,
-                'Version': '2021-07-28',
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-          
-          // Update schedule for next run
-          const nextRun = calculateNextRun(schedule.schedule_type, schedule.schedule_time);
-          await supabase
-            .from('scheduled_prompts')
-            .update({
-              last_run_at: new Date().toISOString(),
-              next_run_at: nextRun.toISOString()
-            })
-            .eq('id', schedule.id);
-          
-          console.log(`Successfully updated ${schedule.custom_value_name}`);
-        }
-      } catch (error) {
-        console.error(`Failed to run scheduled prompt ${schedule.id}:`, error);
-      }
-    }
-  } catch (error) {
-    console.error('Error in cron job:', error);
-  }
-});
-
-// CORRECTED - Complete custom values GET endpoint with async keyword
-app.get('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
-  console.log('=== CUSTOM VALUES DEBUG ===');
-  console.log('User ID:', req.user.id);
-  console.log('Location ID:', req.params.locationId);
-  
-  try {
-    console.log('Looking up location token in database...');
-    
-    const { data: location, error } = await supabase
+    // Store in Supabase
+    const { data, error } = await supabase
       .from('locations')
-      .select('token')
-      .eq('location_id', req.params.locationId)
-      .eq('user_id', req.user.id)
+      .upsert({
+        user_id: req.user.id,
+        location_id: locationId,
+        location_name: locationName,
+        token: token
+      }, {
+        onConflict: 'user_id,location_id'
+      })
+      .select()
       .single();
     
     if (error) {
-      console.log('Database error finding location:', error);
-      return res.status(404).json({ error: 'Location not found: ' + error.message });
+      return res.status(500).json({ error: 'Failed to save location' });
     }
     
-    if (!location) {
-      console.log('No location found with ID:', req.params.locationId);
-      return res.status(404).json({ error: 'Location not found' });
-    }
+    res.json({ success: true, location: data });
     
-    console.log('Found location token:', location.token.substring(0, 20) + '...');
-    console.log('Making call to GoHighLevel API...');
-    
-    const response = await axios.get(
-      `${GHL_API}/locations/${req.params.locationId}/customValues`,
-      {
-        headers: {
-          'Authorization': `Bearer ${location.token}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-    
-    console.log('GHL API Response Status:', response.status);
-    console.log('GHL API Response Data keys:', Object.keys(response.data));
-    
-    res.json(response.data);
   } catch (error) {
-    console.log('=== CUSTOM VALUES ERROR ===');
-    console.log('Error message:', error.message);
-    console.log('Error response status:', error.response?.status);
-    console.log('Error response data:', error.response?.data);
-    
-    res.status(500).json({ 
-      error: 'Failed to fetch custom values: ' + error.message,
-      details: error.response?.data || 'No additional details'
-    });
+    console.error('Token validation error:', error.message);
+    res.status(400).json({ error: 'Invalid Private Integration token' });
   }
 });
 
-// DEBUGGING VERSION - Replace your DELETE location endpoint with this
+// Delete a location
 app.delete('/api/locations/:id', authenticateUser, async (req, res) => {
-  console.log('=== DELETE LOCATION DEBUG ===');
-  console.log('User ID:', req.user.id);
-  console.log('Location ID to delete:', req.params.id);
+  const { error } = await supabase
+    .from('locations')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id);
   
-  try {
-    console.log('Attempting to delete from Supabase...');
-    
-    const { error } = await supabase
-      .from('locations')
-      .delete()
-      .eq('id', req.params.id)
-      .eq('user_id', req.user.id);
-    
-    if (error) {
-      console.log('Supabase delete error:', error);
-      return res.status(500).json({ error: 'Failed to delete location: ' + error.message });
-    }
-    
-    console.log('Location deleted successfully');
-    res.json({ success: true });
-  } catch (error) {
-    console.log('Delete endpoint exception:', error);
-    res.status(500).json({ error: 'Server error: ' + error.message });
+  if (error) {
+    return res.status(500).json({ error: 'Failed to delete location' });
   }
+  
+  res.json({ success: true });
 });
 
+// Get custom values for a location
 app.get('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
+  // Get the token for this location
   const { data: location, error } = await supabase
     .from('locations')
     .select('token')
@@ -800,6 +330,7 @@ app.get('/api/locations/:locationId/customValues', authenticateUser, async (req,
   }
 });
 
+// Create custom value
 app.post('/api/locations/:locationId/customValues', authenticateUser, async (req, res) => {
   const { data: location, error } = await supabase
     .from('locations')
@@ -830,6 +361,7 @@ app.post('/api/locations/:locationId/customValues', authenticateUser, async (req
   }
 });
 
+// Update custom value
 app.put('/api/locations/:locationId/customValues/:valueId', authenticateUser, async (req, res) => {
   const { data: location, error } = await supabase
     .from('locations')
@@ -860,6 +392,7 @@ app.put('/api/locations/:locationId/customValues/:valueId', authenticateUser, as
   }
 });
 
+// Delete custom value
 app.delete('/api/locations/:locationId/customValues/:valueId', authenticateUser, async (req, res) => {
   const { data: location, error } = await supabase
     .from('locations')
@@ -888,7 +421,95 @@ app.delete('/api/locations/:locationId/customValues/:valueId', authenticateUser,
   }
 });
 
+// Custom fields endpoints
+app.get('/api/locations/:locationId/customFields', authenticateUser, async (req, res) => {
+  const { data: location, error } = await supabase
+    .from('locations')
+    .select('token')
+    .eq('location_id', req.params.locationId)
+    .eq('user_id', req.user.id)
+    .single();
+  
+  if (error || !location) {
+    return res.status(404).json({ error: 'Location not found' });
+  }
+  
+  try {
+    const response = await axios.get(
+      `${GHL_API}/locations/${req.params.locationId}/customFields`,
+      {
+        headers: {
+          'Authorization': `Bearer ${location.token}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch custom fields' });
+  }
+});
+
+app.post('/api/locations/:locationId/customFields', authenticateUser, async (req, res) => {
+  const { data: location, error } = await supabase
+    .from('locations')
+    .select('token')
+    .eq('location_id', req.params.locationId)
+    .eq('user_id', req.user.id)
+    .single();
+  
+  if (error || !location) {
+    return res.status(404).json({ error: 'Location not found' });
+  }
+  
+  try {
+    const response = await axios.post(
+      `${GHL_API}/locations/${req.params.locationId}/customFields`,
+      req.body,
+      {
+        headers: {
+          'Authorization': `Bearer ${location.token}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create custom field' });
+  }
+});
+
+app.delete('/api/locations/:locationId/customFields/:fieldId', authenticateUser, async (req, res) => {
+  const { data: location, error } = await supabase
+    .from('locations')
+    .select('token')
+    .eq('location_id', req.params.locationId)
+    .eq('user_id', req.user.id)
+    .single();
+  
+  if (error || !location) {
+    return res.status(404).json({ error: 'Location not found' });
+  }
+  
+  try {
+    await axios.delete(
+      `${GHL_API}/locations/${req.params.locationId}/customFields/${req.params.fieldId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${location.token}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete custom field' });
+  }
+});
+
 // Wizard endpoints
+// Get all templates for a location
 app.get('/api/locations/:locationId/wizards', authenticateUser, async (req, res) => {
   const { data, error } = await supabase
     .from('wizard_templates')
@@ -904,6 +525,7 @@ app.get('/api/locations/:locationId/wizards', authenticateUser, async (req, res)
   res.json({ wizards: data || [] });
 });
 
+// Create new wizard template
 app.post('/api/locations/:locationId/wizards', authenticateUser, async (req, res) => {
   const { name, description, fields, branding, settings } = req.body;
   
@@ -928,6 +550,7 @@ app.post('/api/locations/:locationId/wizards', authenticateUser, async (req, res
   res.json(data);
 });
 
+// Update wizard template
 app.put('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
   const { name, description, fields, branding, settings } = req.body;
   
@@ -953,6 +576,7 @@ app.put('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
   res.json(data);
 });
 
+// Delete wizard template
 app.delete('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
   const { error } = await supabase
     .from('wizard_templates')
@@ -967,9 +591,11 @@ app.delete('/api/wizards/:wizardId', authenticateUser, async (req, res) => {
   res.json({ success: true });
 });
 
+// Create a session (send wizard to client)
 app.post('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) => {
   const { client_email, client_name, expires_in_days } = req.body;
   
+  // Calculate expiry date
   const expires_at = new Date();
   expires_at.setDate(expires_at.getDate() + (expires_in_days || 7));
   
@@ -988,10 +614,13 @@ app.post('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) =
     return res.status(500).json({ error: 'Failed to create session' });
   }
   
+  // Generate the client link
   const clientLink = `${req.protocol}://${req.get('host')}/wizard/${data.access_token}`;
+  
   res.json({ ...data, client_link: clientLink });
 });
 
+// Get sessions for a wizard
 app.get('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) => {
   const { data, error } = await supabase
     .from('wizard_sessions')
@@ -1006,8 +635,10 @@ app.get('/api/wizards/:wizardId/sessions', authenticateUser, async (req, res) =>
   res.json({ sessions: data || [] });
 });
 
-// Client-facing endpoints
+// Client-facing endpoints (no auth required, just access token)
+// Get wizard for client
 app.get('/api/client/wizard/:accessToken', async (req, res) => {
+  // Get session
   const { data: session, error: sessionError } = await supabase
     .from('wizard_sessions')
     .select('*, wizard_templates!inner(*)')
@@ -1018,6 +649,7 @@ app.get('/api/client/wizard/:accessToken', async (req, res) => {
     return res.status(404).json({ error: 'Invalid or expired wizard link' });
   }
   
+  // Check if expired
   if (new Date(session.expires_at) < new Date()) {
     return res.status(410).json({ error: 'This wizard has expired' });
   }
@@ -1025,10 +657,11 @@ app.get('/api/client/wizard/:accessToken', async (req, res) => {
   res.json(session);
 });
 
-// ENHANCED: Submit wizard responses - handles both new and existing custom values
+// Submit wizard responses
 app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
   const { responses } = req.body;
   
+  // Get session and template
   const { data: session, error: sessionError } = await supabase
     .from('wizard_sessions')
     .select('*, wizard_templates!inner(*)')
@@ -1039,6 +672,7 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
     return res.status(404).json({ error: 'Invalid session' });
   }
   
+  // Update session with responses
   const { error: updateError } = await supabase
     .from('wizard_sessions')
     .update({
@@ -1053,6 +687,7 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
     return res.status(500).json({ error: 'Failed to save responses' });
   }
   
+  // Get the location token to save to GHL
   const { data: location } = await supabase
     .from('locations')
     .select('token')
@@ -1061,17 +696,28 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
     .single();
   
   if (location && location.token) {
+    // Save each response to GHL custom values
     for (const field of session.wizard_templates.fields) {
-      if (responses[field.id]) {
+      if (responses[field.id] && field.ghl_field) {
         try {
-          if (field.customValueMode === 'existing' && field.existing_custom_value_id) {
-            // Update existing custom value
+          // Check if this custom value already exists
+          const existingValues = await axios.get(
+            `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
+            {
+              headers: {
+                'Authorization': `Bearer ${location.token}`,
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          const existing = existingValues.data.customValues?.find(v => v.name === field.ghl_field);
+          
+          if (existing) {
+            // Update existing
             await axios.put(
-              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${field.existing_custom_value_id}`,
-              { 
-                name: field.existing_custom_value_name, 
-                value: responses[field.id] 
-              },
+              `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${existing.id}`,
+              { name: field.ghl_field, value: responses[field.id] },
               {
                 headers: {
                   'Authorization': `Bearer ${location.token}`,
@@ -1080,50 +726,22 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
                 }
               }
             );
-            console.log(`Updated existing custom value: ${field.existing_custom_value_name}`);
-            
-          } else if (field.customValueMode === 'create' && field.ghl_field) {
-            // Check if custom value exists
-            const existingValues = await axios.get(
+          } else {
+            // Create new
+            await axios.post(
               `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
+              { name: field.ghl_field, value: responses[field.id] },
               {
                 headers: {
                   'Authorization': `Bearer ${location.token}`,
-                  'Version': '2021-07-28'
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
                 }
               }
             );
-            
-            const existing = existingValues.data.customValues?.find(v => v.name === field.ghl_field);
-            
-            if (existing) {
-              await axios.put(
-                `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues/${existing.id}`,
-                { name: field.ghl_field, value: responses[field.id] },
-                {
-                  headers: {
-                    'Authorization': `Bearer ${location.token}`,
-                    'Version': '2021-07-28',
-                    'Content-Type': 'application/json'
-                  }
-                }
-              );
-            } else {
-              await axios.post(
-                `${GHL_API}/locations/${session.wizard_templates.location_id}/customValues`,
-                { name: field.ghl_field, value: responses[field.id] },
-                {
-                  headers: {
-                    'Authorization': `Bearer ${location.token}`,
-                    'Version': '2021-07-28',
-                    'Content-Type': 'application/json'
-                  }
-                }
-              );
-            }
           }
         } catch (ghlError) {
-          console.error(`Failed to save custom value for field ${field.id}:`, ghlError.message);
+          console.error('Failed to save to GHL:', ghlError.message);
         }
       }
     }
@@ -1132,14 +750,19 @@ app.post('/api/client/wizard/:accessToken/submit', async (req, res) => {
   res.json({ success: true, message: 'Wizard completed successfully' });
 });
 
+// Upload file for wizard session
+app.post('/api/client/wizard/:accessToken/upload', async (req, res) => {
+  // This would handle file uploads via multer or similar
+  // For now, we'll assume the file is uploaded directly to Supabase from the client
+  res.json({ message: 'Use client-side Supabase upload' });
+});
+
+// Serve client wizard page
 app.get('/wizard/:accessToken', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'wizard-client.html'));
 });
 
-app.get('/dashboard.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
+// Start server
 app.listen(PORT, () => {
-  console.log(`AI-Powered Custom Values Manager running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
