@@ -682,17 +682,26 @@ app.get('/api/locations', authenticateUser, async (req, res) => {
   res.json({ locations: data || [] });
 });
 
-// Replace your current location POST endpoint with your original working version
+// Replace your POST /api/locations endpoint with this enhanced debugging version
+
 app.post('/api/locations', authenticateUser, async (req, res) => {
+  console.log('=== ADD LOCATION DEBUG ===');
+  console.log('Request body:', req.body);
+  console.log('User ID:', req.user?.id);
+  console.log('GHL_API:', process.env.GHL_API || GHL_API);
+  
   const { token } = req.body;
   
   if (!token) {
+    console.log('ERROR: No token provided in request body');
     return res.status(400).json({ error: 'Token required' });
   }
   
+  console.log('Token received (first 20 chars):', token.substring(0, 20) + '...');
+  
   try {
-    // First, we need to find the location ID by making a call with the token
-    // We'll use the /oauth/locationInfo endpoint which works with Private Integration tokens
+    // Test the GoHighLevel API call
+    console.log('Making request to GHL API...');
     const locationResponse = await axios.get(
       `${GHL_API}/oauth/locationInfo`,
       {
@@ -703,10 +712,22 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
       }
     );
     
+    console.log('GHL API Response status:', locationResponse.status);
+    console.log('GHL API Response data:', locationResponse.data);
+    
     const locationId = locationResponse.data.locationId;
     const locationName = locationResponse.data.name || locationId;
     
-    // Store in Supabase
+    if (!locationId) {
+      console.log('ERROR: No locationId in GHL response');
+      return res.status(400).json({ error: 'Invalid response from GoHighLevel API' });
+    }
+    
+    console.log('Location ID:', locationId);
+    console.log('Location Name:', locationName);
+    
+    // Test Supabase connection
+    console.log('Attempting to save to Supabase...');
     const { data, error } = await supabase
       .from('locations')
       .upsert({
@@ -721,17 +742,48 @@ app.post('/api/locations', authenticateUser, async (req, res) => {
       .single();
     
     if (error) {
-      return res.status(500).json({ error: 'Failed to save location' });
+      console.log('Supabase error:', error);
+      return res.status(500).json({ error: 'Failed to save location: ' + error.message });
     }
     
+    console.log('Successfully saved location:', data);
     res.json({ success: true, location: data });
     
   } catch (error) {
-    console.error('Token validation error:', error.message);
-    res.status(400).json({ error: 'Invalid Private Integration token' });
+    console.log('=== FULL ERROR DETAILS ===');
+    console.log('Error message:', error.message);
+    console.log('Error status:', error.response?.status);
+    console.log('Error data:', error.response?.data);
+    console.log('Error config:', {
+      url: error.config?.url,
+      headers: error.config?.headers,
+      method: error.config?.method
+    });
+    
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      const status = error.response.status;
+      const message = error.response.data?.message || error.message;
+      
+      if (status === 401) {
+        return res.status(400).json({ error: 'Invalid GoHighLevel token - Authentication failed' });
+      } else if (status === 403) {
+        return res.status(400).json({ error: 'GoHighLevel token lacks required permissions' });
+      } else {
+        return res.status(400).json({ error: `GoHighLevel API error (${status}): ${message}` });
+      }
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.log('No response received from GHL API');
+      return res.status(500).json({ error: 'No response from GoHighLevel API - check network connection' });
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.log('Error setting up request:', error.message);
+      return res.status(500).json({ error: 'Request setup error: ' + error.message });
+    }
   }
 });
-
 app.delete('/api/locations/:id', authenticateUser, async (req, res) => {
   const { error } = await supabase
     .from('locations')
